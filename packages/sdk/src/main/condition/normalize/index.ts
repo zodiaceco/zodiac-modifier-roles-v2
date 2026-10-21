@@ -3,6 +3,7 @@ import { Condition, Operator, ParameterType } from "../../types"
 import { conditionId, rawConditionId } from "../conditionId"
 import { padToMatchTypeTree } from "./padToMatchTypeTree"
 import { pushDownOr } from "./pushDownOr"
+import { canReorderAnd, canReorderOr, charges, isStructural } from "./effects"
 
 /**
  * Normalizes a condition by transforming its structure without altering its semantics.
@@ -50,37 +51,37 @@ const prunePassNodes = (condition: Condition): Condition => {
 
   if (!canPrune) return condition
 
+  // EtherWithinAllowance and CallWithinAllowance children read no parameter
+  // and are moved to the end, unless that could change which allowance is
+  // charged (see canReorderAnd)
   const isGlobalAllowance = (child: Condition) =>
     child.operator === Operator.EtherWithinAllowance ||
     child.operator === Operator.CallWithinAllowance
+  const children = canReorderAnd(condition.children)
+    ? [
+        ...condition.children.filter((child) => !isGlobalAllowance(child)),
+        ...condition.children.filter(isGlobalAllowance),
+      ]
+    : condition.children
 
-  // keep all children nodes with ParameterType.None
-  // (EtherWithinAllowance, CallWithinAllowance conditions appear as children of Calldata.Matches)
-  const tailChildren = condition.children.filter(isGlobalAllowance)
-  const prunableChildren = condition.children.filter(
-    (child) => !isGlobalAllowance(child)
-  )
-
-  // Start from the end and prune all trailing Pass nodes.
   // Always keep the first child, even if it is a Pass, because children must not be empty.
   // For tuples keep all children up to the first dynamic child.
-  let keepChildrenUntil = 0
-  if (isDynamicTuple) {
-    keepChildrenUntil = prunableChildren.findIndex(isDynamicParamType)
-  }
-  let prunedChildren: Condition[] = prunableChildren.slice(
-    0,
-    keepChildrenUntil + 1
-  )
-  for (let i = prunableChildren.length - 1; i > keepChildrenUntil; i--) {
-    const child = prunableChildren[i]
-    if (child.operator !== Operator.Pass) {
-      prunedChildren = prunableChildren.slice(0, i + 1)
-      break
-    }
+  const keepChildrenUntil = isDynamicTuple
+    ? children.findIndex(isDynamicParamType)
+    : 0
+
+  // the trailing run of Pass and non-structural children
+  let cut = children.length
+  for (let i = children.length - 1; i > keepChildrenUntil; i--) {
+    const child = children[i]
+    if (child.operator !== Operator.Pass && isStructural(child)) break
+    cut = i
   }
 
-  condition.children = [...prunedChildren, ...tailChildren]
+  condition.children = [
+    ...children.slice(0, cut),
+    ...children.slice(cut).filter((child) => child.operator !== Operator.Pass),
+  ]
   return condition
 }
 
@@ -101,16 +102,20 @@ const flattenNestedBranches = (condition: Condition): Condition => {
   return condition
 }
 
-/** remove duplicate child branches in AND/OR */
+/**
+ * remove duplicate child branches in AND/OR
+ * (an AND keeps duplicates that charge an allowance: each copy charges again)
+ */
 const dedupeChildren = (condition: Condition): Condition => {
   if (
     condition.operator === Operator.And ||
     condition.operator === Operator.Or
   ) {
+    const isAnd = condition.operator === Operator.And
     const seen = new Set<string>()
     const uniqueChildren = condition.children?.filter((child) => {
       const id = rawConditionId(child)
-      if (seen.has(id)) return false
+      if (seen.has(id)) return isAnd && charges(child)
 
       seen.add(id)
       return true
@@ -134,7 +139,10 @@ const unwrapSingleChild = (condition: Condition): Condition => {
   return condition
 }
 
-/** enforce a canonical order of AND/OR branches */
+/**
+ * enforce a canonical order of AND/OR branches
+ * (unless reordering would change which allowance is charged, see ./effects)
+ */
 const sortBranchesCanonical = (condition: Condition): Condition => {
   if (
     condition.operator === Operator.And ||
@@ -142,12 +150,30 @@ const sortBranchesCanonical = (condition: Condition): Condition => {
   ) {
     if (!condition.children) return condition
 
+    const canReorder =
+      condition.operator === Operator.And
+        ? canReorderAnd(condition.children)
+        : canReorderOr(condition.children)
+    if (!canReorder) return condition
+
     const sorted = condition.children
       .map((c) => ({
         condition: c,
-        id: conditionId(c),
+        id: BigInt(conditionId(c)),
+        raw: rawConditionId(c),
       }))
-      .sort((a, b) => (BigInt(a.id) < BigInt(b.id) ? -1 : 1))
+      // conditionId is not injective: break ties with the raw id
+      .sort((a, b) =>
+        a.id !== b.id
+          ? a.id < b.id
+            ? -1
+            : 1
+          : a.raw < b.raw
+            ? -1
+            : a.raw > b.raw
+              ? 1
+              : 0
+      )
       .map(({ condition }) => condition)
 
     // in case of mixed-type children (dynamic & calldata/abiEncoded), those with children must come first

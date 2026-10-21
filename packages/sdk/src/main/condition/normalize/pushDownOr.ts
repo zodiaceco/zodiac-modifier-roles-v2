@@ -1,6 +1,9 @@
 import { Condition, Operator, ParameterType } from "../../types"
 
-import { conditionId } from "../conditionId"
+// rawConditionId is injective; the packed conditionId is not (compValues are
+// concatenated without lengths), so it must not be used to decide equality.
+import { rawConditionId as conditionId } from "../conditionId"
+import { canReorderAnd, charges, isStructural } from "./effects"
 
 /** push OR conditions as far down the tree as possible without changing semantics */
 export function pushDownOr(
@@ -33,6 +36,16 @@ export function pushDownOr(
     return condition
   }
 
+  // Matches compares children by position only on tuples and calldata
+  if (
+    isMatches &&
+    children[0].paramType !== ParameterType.Tuple &&
+    children[0].paramType !== ParameterType.Calldata &&
+    children[0].paramType !== ParameterType.AbiEncoded
+  ) {
+    return condition
+  }
+
   const [first] = children
 
   const nextChildren = isMatches
@@ -55,6 +68,20 @@ function matches(children: Condition[]): Condition[] {
     return children
   }
 
+  // the merged Or reads a parameter iff its children do, so they must agree,
+  // or the parameters after the hinge would shift
+  const hinges = children.map((c) => c.children![hingeIndex])
+  if (!hinges.every((h) => h && isStructural(h) === isStructural(hinges[0]))) {
+    return children
+  }
+
+  // the merged Or commits to the first passing hinge child; the original
+  // could backtrack into the next branch when a later sibling exceeds an
+  // allowance this child charged
+  if (hinges.some(charges)) {
+    return children
+  }
+
   const [first] = children
 
   return first.children!.map((child, i) =>
@@ -71,8 +98,18 @@ function matches(children: Condition[]): Condition[] {
 function and(children: Condition[]): Condition[] {
   invariant(children.length > 1)
 
+  // each branch is brought into the first branch's order
+  if (!children.every((c) => canReorderAnd(c.children!))) {
+    return children
+  }
+
   const hingeIndices = findAndHingeIndices(children)
   if (!hingeIndices) {
+    return children
+  }
+
+  // see matches(): the merged Or must not commit to a charging child
+  if (children.some((c, i) => charges(c.children![hingeIndices[i]]))) {
     return children
   }
 
@@ -124,6 +161,10 @@ function findMatchesHingeIndex(conditions: readonly Condition[]) {
   }
 
   let hingeIndex: number | null = null
+
+  for (const other of others) {
+    if (other.children!.length !== left.length) return null
+  }
 
   for (const other of others) {
     const right = other.children!
@@ -190,9 +231,21 @@ function findAndHingeIndices(conditions: Condition[]) {
   if (!uniqueChildrenIds.every((ids) => ids.length === 1)) return null
 
   // Step 5: Map the unique IDs back to their original index, or -1 if none
-  return uniqueChildrenIds.map((unique, i) =>
+  const hinges = uniqueChildrenIds.map((unique, i) =>
     unique.length === 0 ? -1 : allChildrenIds[i].indexOf(unique[0])
   )
+
+  // Step 6: The remaining children must agree as multisets, not just as sets:
+  // a duplicate that charges an allowance charges once per copy
+  const rest = allChildrenIds.map((ids, i) =>
+    ids
+      .filter((_, j) => j !== hinges[i])
+      .sort()
+      .join("\n")
+  )
+  if (!rest.every((r) => r === rest[0])) return null
+
+  return hinges
 }
 
 const conditionsEqual = (a: Condition | undefined, b: Condition | undefined) =>
