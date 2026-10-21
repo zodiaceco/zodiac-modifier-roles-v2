@@ -134,4 +134,12 @@ suite("normalizeCondition() keeps semantics", () => {
     expect(f.children![1].children).toHaveLength(1)
     expect(f.children![2].children).toHaveLength(3)
   })
+
+  it("puts calldata branches first even when the branches charge allowances", () => {
+    // Integrity requires the structured branch before the dynamic one
+    const bytesBranch = and(bytesEq("0xaa"), allowance(0xaa))
+    const callBranch = calldata(allowance(0xbb))
+    const result = normalizeCondition(or(bytesBranch, callBranch))
+    expect(result.children![0].paramType).toBe(ParameterType.Calldata)
+  })
 })

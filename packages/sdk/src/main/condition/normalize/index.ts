@@ -141,7 +141,8 @@ const unwrapSingleChild = (condition: Condition): Condition => {
 
 /**
  * enforce a canonical order of AND/OR branches
- * (unless reordering would change which allowance is charged, see ./effects)
+ * (the sort is skipped where it would change which allowance is charged, see
+ * ./effects; the calldata-first order the contract requires is always applied)
  */
 const sortBranchesCanonical = (condition: Condition): Condition => {
   if (
@@ -154,44 +155,40 @@ const sortBranchesCanonical = (condition: Condition): Condition => {
       condition.operator === Operator.And
         ? canReorderAnd(condition.children)
         : canReorderOr(condition.children)
-    if (!canReorder) return condition
 
-    const sorted = condition.children
-      .map((c) => ({
-        condition: c,
-        id: BigInt(conditionId(c)),
-        raw: rawConditionId(c),
-      }))
-      // conditionId is not injective: break ties with the raw id
-      .sort((a, b) =>
-        a.id !== b.id
-          ? a.id < b.id
-            ? -1
-            : 1
-          : a.raw < b.raw
-            ? -1
-            : a.raw > b.raw
-              ? 1
-              : 0
-      )
-      .map(({ condition }) => condition)
+    const sorted = canReorder
+      ? condition.children
+          .map((c) => ({
+            condition: c,
+            id: BigInt(conditionId(c)),
+            raw: rawConditionId(c),
+          }))
+          // conditionId is not injective: break ties with the raw id
+          .sort((a, b) =>
+            a.id !== b.id
+              ? a.id < b.id
+                ? -1
+                : 1
+              : a.raw < b.raw
+                ? -1
+                : a.raw > b.raw
+                  ? 1
+                  : 0
+          )
+          .map(({ condition }) => condition)
+      : condition.children
 
-    // in case of mixed-type children (dynamic & calldata/abiEncoded), those with children must come first
-    const front = sorted.filter(
-      (child) =>
-        child.paramType === ParameterType.Calldata ||
-        child.paramType === ParameterType.AbiEncoded
-    )
-    const back = sorted.filter(
-      (child) =>
-        !(
-          child.paramType === ParameterType.Calldata ||
-          child.paramType === ParameterType.AbiEncoded
-        )
-    )
+    // in case of mixed-type children (dynamic & calldata/abiEncoded), those
+    // with children must come first: Integrity rejects any other order
+    const isStructured = (child: Condition) =>
+      child.paramType === ParameterType.Calldata ||
+      child.paramType === ParameterType.AbiEncoded
     return {
       ...condition,
-      children: [...front, ...back],
+      children: [
+        ...sorted.filter(isStructured),
+        ...sorted.filter((child) => !isStructured(child)),
+      ],
     }
   }
 
