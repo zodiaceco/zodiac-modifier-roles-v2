@@ -142,4 +142,18 @@ suite("normalizeCondition() keeps semantics", () => {
     const result = normalizeCondition(or(bytesBranch, callBranch))
     expect(result.children![0].paramType).toBe(ParameterType.Calldata)
   })
+
+  it("does not prune a Pass before a Nor that reads a later parameter", () => {
+    const nor: Condition = {
+      paramType: ParameterType.None,
+      operator: 3 as Operator, // Nor
+      children: [eq(2)],
+    }
+    const pass: Condition = {
+      paramType: ParameterType.Static,
+      operator: Operator.Pass,
+    }
+    const input = calldata(eq(1), pass, nor)
+    expect(normalizeCondition(input).children).toHaveLength(3)
+  })
 })

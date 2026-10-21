@@ -16,15 +16,24 @@ const CHARGING = new Set([
   Operator.CallWithinAllowance,
 ])
 
+/** Nor (operator 3): not in the SDK's Operator enum, but valid on chain. */
+const NOR = 3 as Operator
+
+const isLogicalOp = (op: Operator) =>
+  op === Operator.And || op === Operator.Or || op === NOR
+
 const has = (c: Condition, pred: (op: Operator) => boolean): boolean =>
   pred(c.operator) || (c.children ?? []).some((child) => has(child, pred))
 
 /** The subtree may charge an allowance when it passes. */
 export const charges = (c: Condition) => has(c, (op) => CHARGING.has(op))
 
-/** The subtree has an Or over branches that charge. */
+/**
+ * The subtree has an Or (or Nor) over branches that charge: whether a branch
+ * passes, and so what is charged, depends on earlier charges.
+ */
 export const choosesCharge = (c: Condition): boolean =>
-  (c.operator === Operator.Or && charges(c)) ||
+  ((c.operator === Operator.Or || c.operator === NOR) && charges(c)) ||
   (c.children ?? []).some(choosesCharge)
 
 /**
@@ -43,10 +52,10 @@ export const canReorderOr = (children: readonly Condition[]) =>
   !children.some(charges)
 
 /**
- * The node reads a parameter: And/Or if any child does, other nodes unless
- * their type is None (e.g. EtherWithinAllowance, CallWithinAllowance).
+ * The node reads a parameter: And/Or/Nor if any child does, other nodes
+ * unless their type is None (e.g. EtherWithinAllowance, CallWithinAllowance).
  */
 export const isStructural = (c: Condition): boolean =>
-  c.operator === Operator.And || c.operator === Operator.Or
+  isLogicalOp(c.operator)
     ? (c.children ?? []).some(isStructural)
     : c.paramType !== ParameterType.None
