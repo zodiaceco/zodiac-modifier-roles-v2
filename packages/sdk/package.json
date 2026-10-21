@@ -5,10 +5,10 @@
   "description": "A library for managing role permissions on Zodiac Roles Modifier",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/gnosisguild/zodiac-modifier-roles.git",
+    "url": "git+https://github.com/zodiaceco/zodiac-modifier-roles-v2.git",
     "directory": "packages/sdk"
   },
-  "homepage": "https://github.com/gnosisguild/zodiac-modifier-roles/tree/main/packages/sdk",
+  "homepage": "https://github.com/zodiaceco/zodiac-modifier-roles-v2/tree/main/packages/sdk",
   "main": "./build/index.js",
   "module": "./build/index.mjs",
   "types": "./build/index.d.ts",

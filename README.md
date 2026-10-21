@@ -1,10 +1,15 @@
+> [!IMPORTANT]
+> **This repository hosts Roles v2, the version in production today, and its tooling**: the contracts at `0xF2964CE6161ce0e75964Fe7927cE114cb0B283D5` and the `zodiac-roles-sdk` 4.x releases on npm.
+>
+> **The latest version, Roles v3, is developed at [zodiaceco/zodiac-modifier-roles](https://github.com/zodiaceco/zodiac-modifier-roles).** It is not yet released for production.
+
 **📯 Legacy Zodiac Roles v1 sources at: [gnosis/zodiac-modifier-roles-v1](https://github.com/gnosisguild/zodiac-modifier-roles-v1)**
 
 ---
 
-# Zodiac Roles Modifier
+# Zodiac Roles Modifier v2
 
-[![Build Status](https://github.com/gnosisguild/zodiac-modifier-roles/actions/workflows/ci.yml/badge.svg)](https://github.com/gnosisguild/zodiac-modifier-roles/actions/workflows/ci.yml)
+[![Build Status](https://github.com/zodiaceco/zodiac-modifier-roles-v2/actions/workflows/ci.yml/badge.svg)](https://github.com/zodiaceco/zodiac-modifier-roles-v2/actions/workflows/ci.yml)
 [![Coverage Status](https://coveralls.io/repos/github/gnosis/zodiac-modifier-roles/badge.svg?branch=main&cache_bust=1)](https://coveralls.io/github/gnosis/zodiac-modifier-roles?branch=main)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](https://github.com/gnosisguild/CODE_OF_CONDUCT)
 
