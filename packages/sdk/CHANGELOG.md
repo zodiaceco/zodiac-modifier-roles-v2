@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.1.4](https://github.com/zodiaceco/zodiac-modifier-roles-v2/compare/zodiac-roles-sdk-v4.1.3...zodiac-roles-sdk-v4.1.4) (2026-10-22)
+
+
+### Bug Fixes
+
+* **sdk:** keep normalizeCondition semantics with allowances ([#1](https://github.com/zodiaceco/zodiac-modifier-roles-v2/issues/1)) ([52c24a0](https://github.com/zodiaceco/zodiac-modifier-roles-v2/commit/52c24a0d0916e780514d56734078ff0e50a99629))
+
 ## [4.1.3](https://github.com/gnosisguild/zodiac-modifier-roles/compare/zodiac-roles-sdk-v4.1.2...zodiac-roles-sdk-v4.1.3) (2026-08-25)
 
 
