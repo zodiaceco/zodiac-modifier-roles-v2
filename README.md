@@ -1,11 +1,14 @@
-**📯 Legacy Zodiac Roles v1 sources at: [gnosis/zodiac-modifier-roles-v1](https://github.com/gnosisguild/zodiac-modifier-roles-v1)**
+> [!IMPORTANT]
+> **This repository hosts Roles v2, the version in production today, and its tooling**: the contracts at `0xF2964CE6161ce0e75964Fe7927cE114cb0B283D5` and the `zodiac-roles-sdk` 4.x releases on npm.
+>
+> **The latest version, Roles v3, is developed at [zodiaceco/zodiac-modifier-roles](https://github.com/zodiaceco/zodiac-modifier-roles).** It is not yet released for production.
 
 ---
 
-# Zodiac Roles Modifier
+# Zodiac Roles Modifier v2
 
-[![Build Status](https://github.com/gnosisguild/zodiac-modifier-roles/actions/workflows/ci.yml/badge.svg)](https://github.com/gnosisguild/zodiac-modifier-roles/actions/workflows/ci.yml)
-[![Coverage Status](https://coveralls.io/repos/github/gnosis/zodiac-modifier-roles/badge.svg?branch=main&cache_bust=1)](https://coveralls.io/github/gnosis/zodiac-modifier-roles?branch=main)
+[![Build Status](https://github.com/zodiaceco/zodiac-modifier-roles-v2/actions/workflows/ci.yml/badge.svg)](https://github.com/zodiaceco/zodiac-modifier-roles-v2/actions/workflows/ci.yml)
+[![Coverage Status](https://coveralls.io/repos/github/zodiaceco/zodiac-modifier-roles-v2/badge.svg?branch=main)](https://coveralls.io/github/zodiaceco/zodiac-modifier-roles-v2?branch=main)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](https://github.com/gnosisguild/CODE_OF_CONDUCT)
 
 The Roles Modifier belongs to the [Zodiac](https://github.com/gnosisguild/zodiac) collection of tools, which can be accessed through the Zodiac App available on [Safe](https://safe.global/).
@@ -70,15 +73,11 @@ The contracts have been developed with [Solidity 0.8.21](https://github.com/ethe
 | AvatarIsOwnerOfERC721   | Custom condition useful for permissioned interaction with Uniswap NFT positions | `0x91B1bd7BCC5E623d5CE76b0152253499a9C819d1` |
 | MorphoBundler3Unwrapper | Transaction unwrapper for Morpho's Bundler3                                     | `0x7533922A155DC6b4Cc0ae4E74D70a73bc86dD3E8` |
 
-#### Subgraphs
-
-- [https://gnosisguild.squids.live/roles:production/api/graphql](https://gnosisguild.squids.live/roles:production/api/graphql)
-
 ### Development environment setup
 
-1. For each package were a `.env.sample` file is present, copy the content of the file into a `.env` file at the same location and populate it with your keys, etc.
+1. For each package where a `.env.sample` file is present, copy the content of the file into a `.env` file at the same location and populate it with your keys, etc.
 2. From the repo root run `yarn`
-3. From the repo root run `yarn prepare`
+3. From the repo root run `yarn build`
 
 After that, you can start working on the different packages.
 
@@ -87,9 +86,7 @@ After that, you can start working on the different packages.
 This monorepo uses [yarn workspaces](https://yarnpkg.com/features/workspaces) and is comprised of:
 
 - **evm**: Roles mod smart contracts
-- **subgraph**: a subgraph indexing deployed Roles mod instances:
 - **sdk**: a TypeScript SDK for managing roles: `zodiac-roles-sdk`
-- **deployments**: a TypeScript package that lists all supported chains and offers functions to fetch roles from the subgraph: `zodiac-roles-deployments`
 - **app**: a webapp for viewing roles: https://roles.gnosisguild.org
 - **docs**: the documentation page: https://docs.roles.gnosisguild.org
 
