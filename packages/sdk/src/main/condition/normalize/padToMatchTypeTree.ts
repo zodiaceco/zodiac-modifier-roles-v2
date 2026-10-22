@@ -7,6 +7,7 @@ import {
   TypeTree,
   typeTreeId,
 } from "../typeTree"
+import { isStructural } from "./effects"
 
 export function padToMatchTypeTree(condition: Condition): Condition {
   /*
@@ -19,6 +20,11 @@ export function padToMatchTypeTree(condition: Condition): Condition {
   }
 
   const isPaddeable = (c: Condition) => isLogical(c) || isComplex(c)
+
+  // type trees are only defined for nodes with populated children
+  if (!(condition.children || []).filter(isPaddeable).every(hasTypeTree)) {
+    return condition
+  }
 
   const typeTreeIds = new Set(
     (condition.children || [])
@@ -91,31 +97,44 @@ function extendWithPassNodes(
     }
   }
 
-  if (isComplex(condition)) {
+  // only extend a node with a type tree of its own type: appending children
+  // to, e.g., an array would change what it checks
+  if (isComplex(condition) && condition.paramType === typeTree.paramType) {
     const children = (condition.children || []) as Condition[]
 
     /*
-     * Merge the padded children with the original children array.
-     * - If condition has fewer children than typeTree: extends with padded nodes
-     * - If condition has more children than typeTree: preserves extra nodes at the end
-     * - Overlapping positions: recursively pad existing nodes with typeTree structure
+     * Only structural children read a field, and the type tree lists only
+     * those: pair them in order, keep the others in place, and append Pass
+     * nodes for the fields the condition has no child for.
      */
+    let field = 0
+    const extended = children.map((child) =>
+      isStructural(child) && field < typeTree.children.length
+        ? extendWithPassNodes(child, typeTree.children[field++])
+        : child
+    )
     return {
       ...condition,
-      children: mergeArrays(
-        children,
-        typeTree.children.map((childTypeTree, index) =>
-          extendWithPassNodes(children[index], childTypeTree)
-        )
-      ),
+      children: [
+        ...extended,
+        ...typeTree.children
+          .slice(field)
+          .map((childTypeTree) =>
+            extendWithPassNodes(undefined, childTypeTree)
+          ),
+      ],
     }
   }
 
   return condition
 }
 
-function mergeArrays<T>(a: T[], b: T[]): T[] {
-  if (a.length <= b.length) return b
-
-  return [...b, ...a.slice(b.length)]
+/** createTypeTree succeeds on every node below (and including) `condition` */
+function hasTypeTree(condition: Condition): boolean {
+  const children = condition.children || []
+  if (isLogical(condition) || isComplex(condition)) {
+    if (children.length === 0) return false
+    if (isArray(condition) && !createTypeTree(children[0])) return false
+  }
+  return children.every(hasTypeTree)
 }

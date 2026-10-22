@@ -1,7 +1,7 @@
 import { expect, it, suite } from "vitest"
 import { Operator, ParameterType } from "../types"
 
-import { conditionAddress } from "./conditionId"
+import { conditionAddress, conditionId } from "./conditionId"
 import { normalizeCondition } from "./normalize"
 
 suite("conditionAddress", () => {
@@ -59,5 +59,64 @@ suite("conditionAddress", () => {
     expect(conditionAddress(normalizedCondition)).to.equal(
       "0xa835a51f2a581493b7416daed729cc78e0f68224" // see: https://arbiscan.io/address/0xa835a51f2a581493b7416daed729cc78e0f68224#code
     )
+  })
+})
+
+suite("conditionId", () => {
+  it("ignores field order, extra fields, missing children and hex case", () => {
+    const a = {
+      compValue: "0xABCD",
+      operator: Operator.EqualTo,
+      paramType: ParameterType.Static,
+      extra: true,
+    } as any
+    const b = {
+      paramType: ParameterType.Static,
+      operator: Operator.EqualTo,
+      compValue: "0xabcd",
+      children: [],
+    } as any
+    expect(conditionId(a)).toBe(conditionId(b))
+  })
+
+  it("treats a missing compValue like an empty one", () => {
+    expect(
+      conditionId({ paramType: ParameterType.Static, operator: Operator.Pass })
+    ).toBe(
+      conditionId({
+        paramType: ParameterType.Static,
+        operator: Operator.Pass,
+        compValue: "0x",
+      })
+    )
+  })
+
+  it("tells apart trees whose packed bytes are the same", () => {
+    // the second child's packed header (0x0020) is folded into the first
+    // child's compValue
+    const twoChildren = {
+      paramType: ParameterType.Tuple,
+      operator: Operator.Matches,
+      children: [
+        {
+          paramType: ParameterType.Static,
+          operator: Operator.EqualTo,
+          compValue: "0x11",
+        },
+        { paramType: ParameterType.Static, operator: Operator.Pass },
+      ],
+    } as const
+    const oneChild = {
+      paramType: ParameterType.Tuple,
+      operator: Operator.Matches,
+      children: [
+        {
+          paramType: ParameterType.Static,
+          operator: Operator.EqualTo,
+          compValue: "0x110020",
+        },
+      ],
+    } as const
+    expect(conditionId(twoChildren)).not.toBe(conditionId(oneChild))
   })
 })

@@ -20,29 +20,43 @@ const ZERO_SALT =
 
 export function conditionHash(condition: Condition) {
   return (
-    "0x" + createHash("sha256").update(rawConditionId(condition)).digest("hex")
+    "0x" + createHash("sha256").update(conditionId(condition)).digest("hex")
   )
 }
 
-export const conditionId = (condition: Condition) => {
-  const conditions = flattenCondition(condition)
-  return concat(
-    conditions.flatMap((condition) => [
-      packCondition(condition),
-      condition.compValue || "0x",
-    ])
-  )
-}
-
-export function rawConditionId(condition: Condition) {
-  const normalize = (c: Condition): Condition => ({
+/**
+ * A canonical string id: two conditions get the same id exactly when they are
+ * the same tree. Field order, extra fields, missing `children`/`compValue` and
+ * the hex case of `compValue` make no difference.
+ */
+export function conditionId(condition: Condition): string {
+  const canonical = (c: Condition): Condition => ({
     paramType: c.paramType,
     operator: c.operator,
-    compValue: c.compValue || "0x",
-    children: (c.children || []).map(normalize),
+    compValue: (c.compValue || "0x").toLowerCase() as `0x${string}`,
+    children: (c.children || []).map(canonical),
   })
 
-  return JSON.stringify(normalize(condition))
+  return JSON.stringify(canonical(condition))
+}
+
+/**
+ * The key normalizeCondition sorts And/Or branches by. It is not an id: the
+ * compValues are concatenated without lengths, so different conditions can
+ * share a key (break ties with conditionId). It stays as it is because the
+ * order it gives decides the normalized tree, and so the condition addresses
+ * of roles already applied on chain.
+ */
+export const conditionSortKey = (condition: Condition): bigint => {
+  const conditions = flattenCondition(condition)
+  return BigInt(
+    concat(
+      conditions.flatMap((condition) => [
+        packCondition(condition),
+        condition.compValue || "0x",
+      ])
+    )
+  )
 }
 
 /**
