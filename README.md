@@ -3,8 +3,6 @@
 >
 > **The latest version, Roles v3, is developed at [zodiaceco/zodiac-modifier-roles](https://github.com/zodiaceco/zodiac-modifier-roles).** It is not yet released for production.
 
-**📯 Legacy Zodiac Roles v1 sources at: [gnosis/zodiac-modifier-roles-v1](https://github.com/gnosisguild/zodiac-modifier-roles-v1)**
-
 ---
 
 # Zodiac Roles Modifier v2
