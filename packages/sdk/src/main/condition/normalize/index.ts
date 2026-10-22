@@ -1,6 +1,6 @@
 import { Condition, Operator, ParameterType } from "../../types"
 
-import { conditionId, rawConditionId } from "../conditionId"
+import { conditionId, conditionSortKey } from "../conditionId"
 import { padToMatchTypeTree } from "./padToMatchTypeTree"
 import { pushDownOr } from "./pushDownOr"
 import { canReorderAnd, canReorderOr, charges, isStructural } from "./effects"
@@ -114,7 +114,7 @@ const dedupeChildren = (condition: Condition): Condition => {
     const isAnd = condition.operator === Operator.And
     const seen = new Set<string>()
     const uniqueChildren = condition.children?.filter((child) => {
-      const id = rawConditionId(child)
+      const id = conditionId(child)
       if (seen.has(id)) return isAnd && charges(child)
 
       seen.add(id)
@@ -160,18 +160,18 @@ const sortBranchesCanonical = (condition: Condition): Condition => {
       ? condition.children
           .map((c) => ({
             condition: c,
-            id: BigInt(conditionId(c)),
-            raw: rawConditionId(c),
+            key: conditionSortKey(c),
+            id: conditionId(c),
           }))
-          // conditionId is not injective: break ties with the raw id
+          // the sort key is not unique: break ties with the id
           .sort((a, b) =>
-            a.id !== b.id
-              ? a.id < b.id
+            a.key !== b.key
+              ? a.key < b.key
                 ? -1
                 : 1
-              : a.raw < b.raw
+              : a.id < b.id
                 ? -1
-                : a.raw > b.raw
+                : a.id > b.id
                   ? 1
                   : 0
           )

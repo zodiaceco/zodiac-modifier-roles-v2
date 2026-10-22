@@ -1,7 +1,7 @@
 import { expect, it, suite } from "vitest"
 
 import { Condition, Operator, ParameterType } from "../../types"
-import { conditionId } from "../conditionId"
+import { conditionId, conditionSortKey } from "../conditionId"
 
 import { normalizeCondition } from "."
 
@@ -51,8 +51,9 @@ suite("normalizeCondition() keeps semantics", () => {
   it("compares branches by their full content when merging an Or", () => {
     const t1 = tuple(bytesEq("0xaa"), bytesEq("0xbb0050cc"))
     const t2 = tuple(bytesEq("0xaa0050bb"), bytesEq("0xcc"))
-    // the packed id is equal, the conditions are not
-    expect(conditionId(t1)).toBe(conditionId(t2))
+    // the sort key is equal, the conditions are not
+    expect(conditionSortKey(t1)).toBe(conditionSortKey(t2))
+    expect(conditionId(t1)).not.toBe(conditionId(t2))
 
     const result = normalizeCondition(
       or(calldata(t1, eq(1)), calldata(t2, eq(2)))
