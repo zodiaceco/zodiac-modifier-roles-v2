@@ -118,22 +118,36 @@ suite("normalizeCondition() keeps semantics", () => {
   })
 
   it("pads the parameter a type tree child describes, past non-parameter children", () => {
+    // dynamic tuples (bytes, ...): padding them moves no other parameter
+    const dyn = bytesEq("0x12")
     const result = normalizeCondition(
       or(
         calldata(
           or(callAllowance(1), callAllowance(2)),
-          tuple(eq(1)),
-          tuple(eq(2), eq(3))
+          tuple(dyn, eq(1)),
+          tuple(dyn, eq(2), eq(3))
         ),
-        calldata(tuple(eq(4)), tuple(eq(5), eq(6), eq(7)))
+        calldata(tuple(dyn, eq(4)), tuple(dyn, eq(5), eq(6), eq(7)))
       )
     )
     const f = result.children!.find(
       (b) => b.children![0].paramType === ParameterType.None
     )!
-    // the first tuple keeps its one field, the second gets the third one
-    expect(f.children![1].children).toHaveLength(1)
-    expect(f.children![2].children).toHaveLength(3)
+    // the first tuple keeps its two fields, the second gets the fourth one
+    expect(f.children![1].children).toHaveLength(2)
+    expect(f.children![2].children).toHaveLength(4)
+  })
+
+  it("never pads a tuple encoded in place: later parameters would move", () => {
+    // f((uint), uint) and g((uint, uint)): growing f's tuple to two fields
+    // would change where f's second parameter is read
+    const result = normalizeCondition(
+      or(calldata(tuple(eq(1)), eq(2)), calldata(tuple(eq(3), eq(4))))
+    )
+    const f = result.children!.find((b) =>
+      b.children!.some((c) => c.compValue === word(2))
+    )!
+    expect(f.children![0].children).toHaveLength(1)
   })
 
   it("puts calldata branches first even when the branches charge allowances", () => {
