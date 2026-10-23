@@ -350,21 +350,14 @@ describe("normalizeCondition", () => {
     })
 
     it("preserves semantics through complex transformations", () => {
-      // Test case that should exercise branch type compatibility
+      // tuples encoded in place are not padded: a longer tuple would
+      // change where everything after it is read
       const input = OR(
         MATCHES(ParameterType.Tuple, COMP(1)),
         MATCHES(ParameterType.Tuple, COMP(2), COMP(3), COMP(4))
       )
 
-      const result = normalizeCondition(input)
-
-      // Should pad the first branch to match the second
-      expect(result).toEqual(
-        OR(
-          MATCHES(ParameterType.Tuple, COMP(1), PASS(), PASS()),
-          MATCHES(ParameterType.Tuple, COMP(2), COMP(3), COMP(4))
-        )
-      )
+      expect(normalizeCondition(input)).toEqual(input)
     })
     it("push down + pad", () => {
       const input = OR(
