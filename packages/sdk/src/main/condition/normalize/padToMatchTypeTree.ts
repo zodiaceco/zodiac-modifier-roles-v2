@@ -1,4 +1,4 @@
-import { Condition, Operator } from "../../types"
+import { Condition, Operator, ParameterType } from "../../types"
 import {
   createTypeTree,
   isArray,
@@ -98,8 +98,14 @@ function extendWithPassNodes(
   }
 
   // only extend a node with a type tree of its own type: appending children
-  // to, e.g., an array would change what it checks
-  if (isComplex(condition) && condition.paramType === typeTree.paramType) {
+  // to, e.g., an array would change what it checks. And never a tuple that is
+  // encoded in place: more fields make it longer, so every later parameter
+  // would be read at a different position.
+  if (
+    isComplex(condition) &&
+    condition.paramType === typeTree.paramType &&
+    !isInPlaceTuple(condition)
+  ) {
     const children = (condition.children || []) as Condition[]
 
     /*
@@ -127,6 +133,23 @@ function extendWithPassNodes(
   }
 
   return condition
+}
+
+/** A tuple written by the user (not a fresh Pass node) encoded in place. */
+function isInPlaceTuple(condition: Condition): boolean {
+  return (
+    condition.paramType === ParameterType.Tuple &&
+    !!condition.children?.length &&
+    isInPlace(createTypeTree(condition))
+  )
+}
+
+/** Mirrors the decoder's `_isInline`: a static value, or a tuple of those. */
+function isInPlace(typeTree: TypeTree | null): boolean {
+  if (!typeTree) return false
+  if (typeTree.paramType === ParameterType.Static) return true
+  if (typeTree.paramType !== ParameterType.Tuple) return false
+  return typeTree.children.every(isInPlace)
 }
 
 /** createTypeTree succeeds on every node below (and including) `condition` */
