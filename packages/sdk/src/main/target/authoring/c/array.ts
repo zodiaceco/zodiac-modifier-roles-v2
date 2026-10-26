@@ -2,6 +2,7 @@ import { ParamType } from "ethers"
 import { Condition, Operator, ParameterType } from "../../../types"
 
 import { mapScoping } from "./matches"
+import { isFixedArray } from "./helpers/parameterType"
 
 import { ArrayElement, ConditionFunction, Scoping } from "../types"
 
@@ -16,6 +17,12 @@ export const every =
   (abiType: ParamType) => {
     if (abiType.baseType !== "array") {
       throw new Error("every() can only be used on array types")
+    }
+    if (isFixedArray(abiType)) {
+      // the contract iterates over a length-prefixed array
+      throw new Error(
+        "every() can only be used on dynamic arrays (T[]); use matches() on fixed-size arrays"
+      )
     }
     if (elementScoping === undefined) {
       throw new Error("every() element condition must not be undefined")
