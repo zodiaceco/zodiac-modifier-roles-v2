@@ -12,6 +12,12 @@ vi.mock("../main/licensing", () => ({
   },
 }))
 
+// Never post to the live CoW orderbook (it would submit a real order, and it
+// rate-limits Node clients anyway).
+vi.mock("./cowOrderbookApi", () => ({
+  postCowOrder: vi.fn(async () => "0xorderid"),
+}))
+
 // Import the License enum and mocked functions
 import { License } from "../main/licensing"
 import { fetchLicense } from "../main/licensing"
@@ -19,6 +25,7 @@ import { postCowOrder as postCowOrderApi } from "./cowOrderbookApi"
 import { encodeKey } from "../main/keys"
 
 const mockFetchLicense = vi.mocked(fetchLicense)
+const mockPostCowOrderApi = vi.mocked(postCowOrderApi)
 
 // Test data
 const WETH_ADDRESS =
@@ -58,6 +65,7 @@ describe("postCowOrder", () => {
   beforeEach(() => {
     // Reset all mocks before each test
     mockFetchLicense.mockReset()
+    mockPostCowOrderApi.mockClear()
   })
 
   it("should successfully post an order", async () => {
@@ -66,7 +74,21 @@ describe("postCowOrder", () => {
 
     // Call the function
     const orderId = await postCowOrder(quoteWithoutFee)
-    expect(orderId).toBeDefined()
+    expect(orderId).toBe("0xorderid")
+
+    expect(mockPostCowOrderApi).toHaveBeenCalledOnce()
+    const [chainId, order] = mockPostCowOrderApi.mock.calls[0]
+    expect(chainId).toBe(SupportedChainId.MAINNET)
+    expect(order).toMatchObject({
+      sellToken: WETH_ADDRESS,
+      buyToken: COW_ADDRESS,
+      appData: quoteWithoutFee.appData,
+      feeAmount: "0",
+      kind: "sell",
+      from: ROLES_MOD_ADDRESS,
+      signature: ROLES_MOD_ADDRESS,
+      signingScheme: "presign",
+    })
   })
 
   it("should throw error for missing partner fee in non-Enterprise license", async () => {
@@ -77,5 +99,6 @@ describe("postCowOrder", () => {
     await expect(postCowOrder(quoteWithoutFee)).rejects.toThrow(
       "Invalid appData partnerFee"
     )
+    expect(mockPostCowOrderApi).not.toHaveBeenCalled()
   })
 })

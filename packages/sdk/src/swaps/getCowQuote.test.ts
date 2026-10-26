@@ -12,11 +12,40 @@ vi.mock("../main/licensing", () => ({
   },
 }))
 
+// Never call the live CoW orderbook: it rate-limits Node clients (HTTP 429),
+// and the CoW SDK's retry backoff then runs past the test timeout. The mock
+// answers like the real endpoint: it echoes the request back as the quote.
+vi.mock("./cowOrderbookApi", () => ({
+  getCowOrderbookQuote: vi.fn(async (_chainId, request) => ({
+    quote: {
+      sellToken: request.sellToken.toLowerCase(),
+      buyToken: request.buyToken.toLowerCase(),
+      receiver: request.receiver.toLowerCase(),
+      sellAmount: "999966852721560360",
+      buyAmount: "18487546591058794003291",
+      validTo: request.validTo,
+      appData: request.appData,
+      feeAmount: "33147278439640",
+      kind: request.kind,
+      partiallyFillable: false,
+      sellTokenBalance: "erc20",
+      buyTokenBalance: "erc20",
+      signingScheme: request.signingScheme,
+    },
+    from: request.from,
+    expiration: "2026-01-01T00:00:00Z",
+    id: 1,
+    verified: true,
+  })),
+}))
+
 // Import the License enum from the actual module for type safety
 import { License } from "../main/licensing"
 import { fetchLicense } from "../main/licensing"
 import { encodeKey } from "../main/keys"
+import { getCowOrderbookQuote } from "./cowOrderbookApi"
 const mockFetchLicense = vi.mocked(fetchLicense)
+const mockGetCowOrderbookQuote = vi.mocked(getCowOrderbookQuote)
 
 // Token addresses on mainnet
 const WETH_ADDRESS =
@@ -39,75 +68,88 @@ describe("getCowQuote", () => {
   beforeEach(() => {
     // Reset the mock before each test
     mockFetchLicense.mockReset()
+    mockGetCowOrderbookQuote.mockClear()
   })
 
-  it(
-    "should use 25 basis points partner fee for License.None",
-    { timeout: 10000 },
-    async () => {
-      // Set up mock to return License.None
-      mockFetchLicense.mockResolvedValue(License.None)
+  it("should use 25 basis points partner fee for License.None", async () => {
+    // Set up mock to return License.None
+    mockFetchLicense.mockResolvedValue(License.None)
 
-      // Calculate a valid timestamp (30 minutes from now)
-      const validTo = Math.floor(Date.now() / 1000) + 30 * 60
+    // Calculate a valid timestamp (30 minutes from now)
+    const validTo = Math.floor(Date.now() / 1000) + 30 * 60
 
-      // Call getCowQuote
-      const quote = await getCowQuote({
-        kind: "sell",
-        sellToken: WETH_ADDRESS,
-        buyToken: COW_ADDRESS,
-        sellAmountBeforeFee: ONE_ETH_WEI,
-        validTo,
-        chainId: SupportedChainId.MAINNET,
-        rolesModifier: ROLES_MOD_ADDRESS,
-        roleKey: encodeKey("test-role"),
-        avatar: AVATAR_ADDRESS,
-        owner: OWNER_ADDRESS,
-      })
+    // Call getCowQuote
+    const quote = await getCowQuote({
+      kind: "sell",
+      sellToken: WETH_ADDRESS,
+      buyToken: COW_ADDRESS,
+      sellAmountBeforeFee: ONE_ETH_WEI,
+      validTo,
+      chainId: SupportedChainId.MAINNET,
+      rolesModifier: ROLES_MOD_ADDRESS,
+      roleKey: encodeKey("test-role"),
+      avatar: AVATAR_ADDRESS,
+      owner: OWNER_ADDRESS,
+    })
 
-      // Verify the quote was successful
-      expect(quote).toBeDefined()
-      expect(quote.sellToken.toLowerCase()).toBe(WETH_ADDRESS.toLowerCase())
-      expect(quote.buyToken.toLowerCase()).toBe(COW_ADDRESS.toLowerCase())
+    // Verify the quote was successful
+    expect(quote).toBeDefined()
+    expect(quote.sellToken.toLowerCase()).toBe(WETH_ADDRESS.toLowerCase())
+    expect(quote.buyToken.toLowerCase()).toBe(COW_ADDRESS.toLowerCase())
 
-      // Parse appData to verify partner fee
-      const appData = JSON.parse(quote.appData)
-      expect(appData.metadata.partnerFee.bps).toBe(25)
-    }
-  )
+    // Parse appData to verify partner fee
+    const appData = JSON.parse(quote.appData)
+    expect(appData.metadata.partnerFee.bps).toBe(25)
 
-  it(
-    "should use 0 basis points partner fee for License.Enterprise",
-    { timeout: 10000 },
-    async () => {
-      // Set up mock to return License.Enterprise
-      mockFetchLicense.mockResolvedValue(License.Enterprise)
+    // and that is what went to the orderbook
+    expect(mockGetCowOrderbookQuote).toHaveBeenCalledOnce()
+    const [chainId, request] = mockGetCowOrderbookQuote.mock.calls[0]
+    expect(chainId).toBe(SupportedChainId.MAINNET)
+    expect(request).toMatchObject({
+      from: AVATAR_ADDRESS,
+      receiver: AVATAR_ADDRESS,
+      validTo,
+      kind: "sell",
+      sellAmountBeforeFee: ONE_ETH_WEI.toString(),
+      signingScheme: "presign",
+    })
+    expect(JSON.parse(request.appData as string).metadata.partnerFee.bps).toBe(
+      25
+    )
+  })
 
-      // Calculate a valid timestamp (30 minutes from now)
-      const validTo = Math.floor(Date.now() / 1000) + 30 * 60
+  it("should use 0 basis points partner fee for License.Enterprise", async () => {
+    // Set up mock to return License.Enterprise
+    mockFetchLicense.mockResolvedValue(License.Enterprise)
 
-      // Call getCowQuote
-      const quote = await getCowQuote({
-        kind: "sell",
-        sellToken: WETH_ADDRESS,
-        buyToken: COW_ADDRESS,
-        sellAmountBeforeFee: ONE_ETH_WEI,
-        validTo,
-        chainId: SupportedChainId.MAINNET,
-        rolesModifier: ROLES_MOD_ADDRESS,
-        roleKey: encodeKey("test-role"),
-        avatar: AVATAR_ADDRESS,
-        owner: OWNER_ADDRESS,
-      })
+    // Calculate a valid timestamp (30 minutes from now)
+    const validTo = Math.floor(Date.now() / 1000) + 30 * 60
 
-      // Verify the quote was successful
-      expect(quote).toBeDefined()
-      expect(quote.sellToken.toLowerCase()).toBe(WETH_ADDRESS.toLowerCase())
-      expect(quote.buyToken.toLowerCase()).toBe(COW_ADDRESS.toLowerCase())
+    // Call getCowQuote
+    const quote = await getCowQuote({
+      kind: "sell",
+      sellToken: WETH_ADDRESS,
+      buyToken: COW_ADDRESS,
+      sellAmountBeforeFee: ONE_ETH_WEI,
+      validTo,
+      chainId: SupportedChainId.MAINNET,
+      rolesModifier: ROLES_MOD_ADDRESS,
+      roleKey: encodeKey("test-role"),
+      avatar: AVATAR_ADDRESS,
+      owner: OWNER_ADDRESS,
+    })
 
-      // Parse appData to verify no partner fee specified
-      const appData = JSON.parse(quote.appData)
-      expect(appData.metadata.partnerFee).toBe(undefined)
-    }
-  )
+    // Verify the quote was successful
+    expect(quote).toBeDefined()
+    expect(quote.sellToken.toLowerCase()).toBe(WETH_ADDRESS.toLowerCase())
+    expect(quote.buyToken.toLowerCase()).toBe(COW_ADDRESS.toLowerCase())
+
+    // Parse appData to verify no partner fee specified
+    const appData = JSON.parse(quote.appData)
+    expect(appData.metadata.partnerFee).toBe(undefined)
+    const [, request] = mockGetCowOrderbookQuote.mock.calls[0]
+    expect(JSON.parse(request.appData as string).metadata.partnerFee).toBe(
+      undefined
+    )
+  })
 })
