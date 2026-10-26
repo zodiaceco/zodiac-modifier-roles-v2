@@ -47,6 +47,12 @@ const MATCHES = (
   children,
 })
 
+const DYN = (n: number): Condition => ({
+  paramType: ParameterType.Dynamic,
+  operator: Operator.EqualTo,
+  compValue: abiEncode(["bytes"], ["0x" + n.toString(16).padStart(2, "0")]),
+})
+
 describe("padToMatchTypeTree", () => {
   describe("Basic padding scenarios", () => {
     it("pads shorter Calldata branch to match longer one", () => {
@@ -138,20 +144,27 @@ describe("padToMatchTypeTree", () => {
       )
     })
 
-    it("pads Tuple branches", () => {
+    it("pads dynamic Tuple branches", () => {
+      const input = OR(
+        MATCHES(ParameterType.Tuple, DYN(1), COMP(2)),
+        MATCHES(ParameterType.Tuple, DYN(3))
+      )
+
+      expect(padToMatchTypeTree(input)).toEqual(
+        OR(
+          MATCHES(ParameterType.Tuple, DYN(1), COMP(2)),
+          MATCHES(ParameterType.Tuple, DYN(3), PASS())
+        )
+      )
+    })
+
+    it("does not pad tuples encoded in place: they would grow and move what follows", () => {
       const input = OR(
         MATCHES(ParameterType.Tuple, COMP(1), COMP(2)),
         MATCHES(ParameterType.Tuple, COMP(3))
       )
 
-      const result = normalizeCondition(input)
-
-      expect(result).toEqual(
-        OR(
-          MATCHES(ParameterType.Tuple, COMP(3), PASS()),
-          MATCHES(ParameterType.Tuple, COMP(1), COMP(2))
-        )
-      )
+      expect(padToMatchTypeTree(input)).toEqual(input)
     })
 
     it("handles mixed types, pads matching types", () => {
@@ -237,11 +250,11 @@ describe("padToMatchTypeTree", () => {
       const input = OR(
         MATCHES(
           ParameterType.Calldata,
-          MATCHES(ParameterType.Tuple, PASS(), COMP(1))
+          MATCHES(ParameterType.Tuple, DYN(1), COMP(1))
         ),
         MATCHES(
           ParameterType.Calldata,
-          MATCHES(ParameterType.Tuple, COMP(2)),
+          MATCHES(ParameterType.Tuple, DYN(2)),
           MATCHES(
             ParameterType.Tuple,
             COMP(2),
@@ -255,7 +268,7 @@ describe("padToMatchTypeTree", () => {
         // Simple call
         MATCHES(
           ParameterType.Calldata,
-          MATCHES(ParameterType.Tuple, PASS(), COMP(1)),
+          MATCHES(ParameterType.Tuple, DYN(1), COMP(1)),
           PASS_(
             ParameterType.Tuple,
             PASS(),
@@ -266,7 +279,7 @@ describe("padToMatchTypeTree", () => {
         // Complex call with nested tuple
         MATCHES(
           ParameterType.Calldata,
-          MATCHES(ParameterType.Tuple, COMP(2), PASS()),
+          MATCHES(ParameterType.Tuple, DYN(2), PASS()),
           MATCHES(
             ParameterType.Tuple,
             COMP(2),
@@ -333,18 +346,28 @@ describe("padToMatchTypeTree", () => {
     it("handles complex branches inside Arrays", () => {
       const input = MATCHES(
         ParameterType.Array,
-        MATCHES(ParameterType.Tuple, COMP(1), PASS(), COMP(3)),
-        MATCHES(ParameterType.Tuple, COMP(4))
+        MATCHES(ParameterType.Tuple, DYN(1), PASS(), COMP(3)),
+        MATCHES(ParameterType.Tuple, DYN(4))
       )
 
       const expected = MATCHES(
         ParameterType.Array,
-        MATCHES(ParameterType.Tuple, COMP(1), PASS(), COMP(3)),
-        MATCHES(ParameterType.Tuple, COMP(4), PASS(), PASS())
+        MATCHES(ParameterType.Tuple, DYN(1), PASS(), COMP(3)),
+        MATCHES(ParameterType.Tuple, DYN(4), PASS(), PASS())
       )
 
       expect(padToMatchTypeTree(input)).toEqual(expected)
       expect(normalizeCondition(input)).toEqual(expected)
+    })
+
+    it("does not pad tuple elements encoded in place", () => {
+      const input = MATCHES(
+        ParameterType.Array,
+        MATCHES(ParameterType.Tuple, COMP(1), PASS(), COMP(3)),
+        MATCHES(ParameterType.Tuple, COMP(4))
+      )
+
+      expect(padToMatchTypeTree(input)).toEqual(input)
     })
   })
 
