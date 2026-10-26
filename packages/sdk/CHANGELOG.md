@@ -1,5 +1,13 @@
 # Changelog
 
+## [4.1.5](https://github.com/zodiaceco/zodiac-modifier-roles-v2/compare/zodiac-roles-sdk-v4.1.4...zodiac-roles-sdk-v4.1.5) (2026-10-26)
+
+
+### Bug Fixes
+
+* **sdk:** describe fixed-size arrays as tuples ([#7](https://github.com/zodiaceco/zodiac-modifier-roles-v2/issues/7)) ([b9be220](https://github.com/zodiaceco/zodiac-modifier-roles-v2/commit/b9be220895e7fdd93b577a60157ba2d8bfb240a3))
+* **sdk:** do not pad tuples that are encoded in place ([#6](https://github.com/zodiaceco/zodiac-modifier-roles-v2/issues/6)) ([1bce761](https://github.com/zodiaceco/zodiac-modifier-roles-v2/commit/1bce7613bda924f9db3273b1e5a6563b45d6a6bc))
+
 ## [4.1.4](https://github.com/zodiaceco/zodiac-modifier-roles-v2/compare/zodiac-roles-sdk-v4.1.3...zodiac-roles-sdk-v4.1.4) (2026-10-22)
 
 
