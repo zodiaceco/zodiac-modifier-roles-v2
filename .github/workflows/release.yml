@@ -25,7 +25,7 @@ permissions:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       # No `token:` here on purpose. The built-in GITHUB_TOKEN is enough
       # because the publish happens in this same job — nothing needs the
@@ -36,7 +36,7 @@ jobs:
       # workflows, so ci.yml will not run on the release PR. If that matters,
       # swap in a GitHub App token (actions/create-github-app-token) rather
       # than going back to a PAT.
-      - uses: googleapis/release-please-action@v4
+      - uses: googleapis/release-please-action@v5
         id: release
         if: github.event_name == 'push'
         with:
@@ -44,7 +44,7 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         # everything below runs only for an actual publication — a new release,
         # or a manual dispatch asking for one
         if: ${{ steps.release.outputs.releases_created || inputs.publish }}
@@ -54,12 +54,12 @@ jobs:
       # configured" and never starts the OIDC exchange, failing with E404.
       # See actions/setup-node#1551 and npm/documentation#1960.
       # npm defaults to registry.npmjs.org anyway.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           # 24.x ships npm 11.17.x; trusted publishing needs >= 11.5.1
           node-version: 24
         if: ${{ steps.release.outputs.releases_created || inputs.publish }}
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: |
             **/node_modules
