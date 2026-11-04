@@ -172,3 +172,165 @@ suite("normalizeCondition() keeps semantics", () => {
     expect(normalizeCondition(input).children).toHaveLength(3)
   })
 })
+
+const pass: Condition = {
+  paramType: ParameterType.Static,
+  operator: Operator.Pass,
+}
+const avatar: Condition = {
+  paramType: ParameterType.Static,
+  operator: Operator.EqualToAvatar,
+}
+
+const permutations = <T>(xs: readonly T[]): T[][] =>
+  xs.length <= 1
+    ? [[...xs]]
+    : xs.flatMap((x, i) =>
+        permutations([...xs.slice(0, i), ...xs.slice(i + 1)]).map((p) => [
+          x,
+          ...p,
+        ])
+      )
+
+const idOf = (branches: Condition[]) =>
+  conditionId(normalizeCondition(structuredClone(or(...branches))))
+
+/** The normalized ids of an Or over `branches`, in every order. */
+const idsInEveryOrder = (branches: Condition[]) =>
+  new Set(permutations(branches).map(idOf))
+
+/** The normalized ids in some orders: rotated and reversed. */
+const idsInSomeOrders = (branches: Condition[]) =>
+  new Set(
+    branches.flatMap((_, k) => {
+      const rotated = [...branches.slice(k), ...branches.slice(0, k)]
+      return [idOf(rotated), idOf([...rotated].reverse())]
+    })
+  )
+
+suite("normalizeCondition() sorts Or branches that exclude each other", () => {
+  it("sorts capped branches that pin a parameter to different values", () => {
+    const branches = [
+      calldata(eq(3), allowance(0xaa)),
+      calldata(eq(1), allowance(0xbb)),
+      calldata(eq(2), allowance(0xaa)),
+    ]
+    expect(idsInEveryOrder(branches).size).toBe(1)
+  })
+
+  it("keeps the order of capped branches that can both pass", () => {
+    const branches = [
+      calldata(eq(1), allowance(0xaa)),
+      calldata(pass, allowance(0xbb)),
+    ]
+    expect(idsInEveryOrder(branches).size).toBe(2)
+    const input = or(...branches)
+    expect(normalizeCondition(structuredClone(input))).toEqual(input)
+  })
+
+  it("treats an Or of EqualTo as a set of values", () => {
+    expect(
+      idsInEveryOrder([
+        calldata(or(eq(1), eq(2)), allowance(0xaa)),
+        calldata(eq(3), allowance(0xbb)),
+      ]).size
+    ).toBe(1)
+    expect(
+      idsInEveryOrder([
+        calldata(or(eq(1), eq(2)), allowance(0xaa)),
+        calldata(eq(2), allowance(0xbb)),
+      ]).size
+    ).toBe(2)
+  })
+
+  it("finds the exclusion in one child of an And", () => {
+    const branches = [
+      and(calldata(eq(1), pass), calldata(pass, allowance(0xaa))),
+      calldata(eq(2), allowance(0xbb)),
+    ]
+    expect(idsInEveryOrder(branches).size).toBe(1)
+  })
+
+  it("does not compare the words of an EqualTo on a dynamic value", () => {
+    const branches = [
+      calldata(bytesEq(word(1)), allowance(0xaa)),
+      calldata(bytesEq(word(2)), allowance(0xbb)),
+    ]
+    expect(idsInEveryOrder(branches).size).toBe(2)
+  })
+
+  it("keeps the order of branches that charge a call allowance and overlap", () => {
+    const branches = [
+      and(calldata(eq(1), pass), callAllowance(0xaa)),
+      and(calldata(pass, eq(2)), callAllowance(0xbb)),
+    ]
+    expect(idsInEveryOrder(branches).size).toBe(2)
+  })
+
+  it("normalizes CoW signOrder branches (Rise, Arbitrum) to one id", () => {
+    // signOrder(GPv2Order.Data order, uint32 validDuration, uint256 feeAmountBP)
+    // through delegatecall: sell and buy token pinned, receiver the avatar,
+    // the sell amount capped with one allowance per direction
+    const [WETH, USDC, USDT0, USDG] = [0x82af, 0xaf88, 0xfd08, 0xe0b8]
+    const stables = [USDC, USDT0, USDG]
+    const [A, B, C] = [0xa, 0xb, 0xc]
+    const order = (sell: number, buy: number[], key: number) =>
+      calldata(
+        tuple(
+          eq(sell), // sellToken
+          buy.length === 1 ? eq(buy[0]) : or(...buy.map(eq)), // buyToken
+          avatar, // receiver
+          allowance(key), // sellAmount
+          pass, // buyAmount
+          pass, // validTo
+          pass, // appData
+          eq(0), // feeAmount
+          eq(0xf3b2), // kind: sell
+          eq(0), // partiallyFillable
+          eq(0x5a28), // sellTokenBalance: erc20
+          eq(0x5a28) // buyTokenBalance: erc20
+        ),
+        pass,
+        pass
+      )
+    const branches = [
+      order(WETH, stables, A),
+      ...stables.map((s) => order(s, [WETH], B)),
+      ...stables.map((s) => order(s, stables, C)),
+    ]
+    expect(branches).toHaveLength(7)
+    expect(idsInSomeOrders(branches).size).toBe(1)
+  })
+
+  it("normalizes Across deposit branches (Rise, Arbitrum) to one id", () => {
+    // deposit(bytes32 depositor, bytes32 recipient, bytes32 inputToken,
+    //   bytes32 outputToken, uint256 inputAmount, uint256 outputAmount,
+    //   uint256 destinationChainId, bytes32 exclusiveRelayer,
+    //   uint32 quoteTimestamp, uint32 fillDeadline,
+    //   uint32 exclusivityDeadline, bytes message)
+    const USDC = 0xaf88
+    const WETH = 0x82af
+    const [rebalanceDaily, payoutEthMonthly] = [0xd, 0xe]
+    const deposit = (token: number, chain: number, key: number) =>
+      calldata(
+        avatar,
+        eq(0x99), // recipient
+        eq(token), // inputToken
+        eq(token * 0x10000 + chain), // outputToken on that chain
+        allowance(key), // inputAmount
+        pass,
+        eq(chain), // destinationChainId
+        pass,
+        pass,
+        pass,
+        pass,
+        bytesEq("0x") // message
+      )
+    const branches = [1, 10, 8453].flatMap((chain) => [
+      deposit(USDC, chain, rebalanceDaily),
+      deposit(WETH, chain, payoutEthMonthly),
+    ])
+    expect(branches).toHaveLength(6)
+    expect(idsInSomeOrders(branches).size).toBe(1)
+  })
+})
