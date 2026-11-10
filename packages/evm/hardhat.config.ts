@@ -13,10 +13,7 @@ import { TypechainConfig } from "@typechain/hardhat/dist/types";
 // Load environment variables.
 dotenv.config();
 
-import "./tasks/deploy-mastercopies";
 import "./tasks/deploy-mastercopy";
-import "./tasks/extract-mastercopy";
-import "./tasks/verify-mastercopies";
 import "./tasks/verify-mastercopy";
 
 const { INFURA_KEY, PK, MNEMONIC, ETHERSCAN_API_KEY } = process.env;
