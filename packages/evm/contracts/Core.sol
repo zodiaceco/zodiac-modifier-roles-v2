@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 pragma solidity >=0.8.17 <0.9.0;
 
-import "@gnosis-guild/zodiac-core/contracts/core/Modifier.sol";
+import "@gnosis.pm/zodiac/contracts/core/Modifier.sol";
 import "./Types.sol";
 
 /**
@@ -23,11 +23,7 @@ abstract contract Core is Modifier {
     function _load(
         Role storage role,
         bytes32 key
-    )
-        internal
-        view
-        virtual
-        returns (Condition memory, AbiTypeTree[] memory, Consumption[] memory);
+    ) internal view virtual returns (Condition memory, Consumption[] memory);
 
     function _accruedAllowance(
         Allowance memory allowance,

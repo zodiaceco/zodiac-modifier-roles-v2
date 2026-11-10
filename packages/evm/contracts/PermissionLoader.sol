@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 pragma solidity >=0.8.17 <0.9.0;
 
-import "@gnosis-guild/zodiac-core/contracts/core/Modifier.sol";
-
-import "./_Core.sol";
+import "@gnosis.pm/zodiac/contracts/core/Modifier.sol";
 import "./Consumptions.sol";
+import "./Core.sol";
 import "./Topology.sol";
 import "./WriteOnce.sol";
 
@@ -40,26 +39,19 @@ abstract contract PermissionLoader is Core {
         internal
         view
         override
-        returns (
-            Condition memory condition,
-            AbiTypeTree[] memory typeTree,
-            Consumption[] memory consumptions
-        )
+        returns (Condition memory condition, Consumption[] memory consumptions)
     {
-        ConditionFlat[] memory conditionsFlat;
-        bytes32[] memory compValues;
-        {
-            (uint256 count, address pointer) = BufferPacker.unpackHeader(
-                role.scopeConfig[key]
-            );
-            bytes memory buffer = WriteOnce.load(pointer);
-            (conditionsFlat, compValues) = BufferPacker.unpackBody(
-                buffer,
-                count
-            );
-        }
+        (uint256 count, address pointer) = BufferPacker.unpackHeader(
+            role.scopeConfig[key]
+        );
+        bytes memory buffer = WriteOnce.load(pointer);
+        (
+            ConditionFlat[] memory conditionsFlat,
+            bytes32[] memory compValues
+        ) = BufferPacker.unpackBody(buffer, count);
 
         uint256 allowanceCount;
+
         for (uint256 i; i < conditionsFlat.length; ) {
             Operator operator = conditionsFlat[i].operator;
             if (operator >= Operator.WithinAllowance) {
@@ -75,17 +67,16 @@ abstract contract PermissionLoader is Core {
             }
         }
 
-        {
-            Topology.Bounds[] memory bounds = Topology.childrenBounds(
-                conditionsFlat
-            );
-            typeTree = Topology.typeTree(conditionsFlat, 0, bounds);
-            _conditionTree(conditionsFlat, compValues, bounds, 0, condition);
-        }
+        _conditionTree(
+            conditionsFlat,
+            compValues,
+            Topology.childrenBounds(conditionsFlat),
+            0,
+            condition
+        );
 
         return (
             condition,
-            typeTree,
             allowanceCount > 0
                 ? _consumptions(conditionsFlat, compValues, allowanceCount)
                 : consumptions

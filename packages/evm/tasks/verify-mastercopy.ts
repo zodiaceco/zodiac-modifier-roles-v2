@@ -1,48 +1,28 @@
-import { task, types } from "hardhat/config";
-import { readMastercopies, verifyMastercopy } from "@gnosis-guild/zodiac-core";
+import { task } from "hardhat/config";
+import type { HardhatRuntimeEnvironment } from "hardhat/types";
+
+import {
+  buildMastercopyDeployments,
+  type MastercopyDeployment,
+} from "./buildMastercopyDeployments";
 
 task(
   "verify:mastercopy",
-  "Verifies all mastercopies from the artifacts file in the block explorer corresponding to the current network",
-)
-  .addOptionalParam(
-    "contractVersion",
-    "Specify a specific version",
-    "latest", // Default value
-    types.string,
-  )
-  .setAction(async ({ contractVersion }, hre) => {
-    const apiKey = hre.config.etherscan.apiKey as string;
-    if (!apiKey) {
-      throw new Error(
-        "Missing etherscan api key for network " + hre.network.name,
-      );
-    }
+  "Verifies the current Roles release (primary mastercopy plus prerequisite singleton libraries and periphery contracts) without local metadata",
+).setAction(async (_, hre) => {
+  for (const deployment of await buildMastercopyDeployments(hre)) {
+    await verifyOne(deployment, hre);
+  }
+});
 
-    const chainId = Number((await hre.ethers.provider.getNetwork()).chainId);
-
-    for (const artifact of readMastercopies({ contractVersion })) {
-      const { noop } = await verifyMastercopy({
-        chainId: chainId,
-        apiKey,
-        artifact,
-      }).catch((e) => {
-        console.error(
-          `Error verifying ${artifact.contractName}@${artifact.contractVersion}: ${e}`,
-        );
-        throw e;
-      });
-
-      const { contractName, contractVersion, address } = artifact;
-
-      if (noop) {
-        console.log(
-          `🔄 ${contractName}@${contractVersion}: Already verified at ${address}`,
-        );
-      } else {
-        console.log(
-          `🚀 ${contractName}@${contractVersion}: Successfully verified at ${address}`,
-        );
-      }
-    }
+async function verifyOne(
+  deployment: MastercopyDeployment,
+  hre: HardhatRuntimeEnvironment,
+) {
+  await hre.run("verify:verify", {
+    address: deployment.address,
+    constructorArguments: deployment.constructorArgs.values,
+    contract: deployment.contract,
+    libraries: deployment.libraries,
   });
+}

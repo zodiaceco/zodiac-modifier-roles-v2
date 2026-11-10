@@ -1,7 +1,14 @@
 import { expect } from "chai";
 import hre from "hardhat";
 import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
-import { AbiCoder, BytesLike } from "ethers";
+import {
+  AbiCoder,
+  BytesLike,
+  ZeroHash,
+  concat,
+  toBeHex,
+  zeroPadValue,
+} from "ethers";
 
 import {
   AbiType,
@@ -22,6 +29,16 @@ const ROLE_KEY2 =
   "0x0000000000000000000000000000000000000000000000000000000000000002";
 
 const defaultAbiCoder = AbiCoder.defaultAbiCoder();
+
+function appendContractSignature(data: string, signer: string) {
+  return concat([
+    data,
+    ZeroHash,
+    zeroPadValue(signer, 32),
+    toBeHex((data.length - 2) / 2, 32),
+    "0x00",
+  ]);
+}
 
 describe("Roles", async () => {
   async function setup() {
@@ -133,7 +150,7 @@ describe("Roles", async () => {
       const { roles, alice, bob } = await loadFixture(setup);
       await expect(
         roles.connect(alice).assignRoles(bob.address, [ROLE_KEY1], [true]),
-      ).to.be.revertedWith("Ownable: caller is not the owner");
+      ).to.be.revertedWithCustomError(roles, "OwnableUnauthorizedAccount");
     });
     it("assigns roles to a module", async () => {
       const { roles, testContract, owner, invoker } = await loadFixture(setup);
@@ -251,7 +268,7 @@ describe("Roles", async () => {
       const { roles, alice, bob } = await loadFixture(setup);
       await expect(
         roles.connect(alice).setDefaultRole(bob.address, ROLE_KEY1),
-      ).to.be.revertedWith("Ownable: caller is not the owner");
+      ).to.be.revertedWithCustomError(roles, "OwnableUnauthorizedAccount");
     });
     it("sets default role", async () => {
       const { roles, testContract, owner, invoker } = await loadFixture(setup);
@@ -527,6 +544,40 @@ describe("Roles", async () => {
 
       result = await roles.allowances(allowanceKey);
       expect(result.balance).to.equal(1000);
+    });
+
+    it("rejects relayed execution when an ERC-1271 signer reverts with the magic value", async () => {
+      const { roles, testContract, owner, alice } = await loadFixture(setup);
+      const FaultyErc1271Signer = await hre.ethers.getContractFactory(
+        "FaultyErc1271Signer",
+      );
+      const contractSigner = await FaultyErc1271Signer.deploy();
+      const signerAddress = await contractSigner.getAddress();
+      const testContractAddress = await testContract.getAddress();
+
+      await roles.connect(owner).assignRoles(signerAddress, [ROLE_KEY], [true]);
+      await roles
+        .connect(owner)
+        .allowTarget(ROLE_KEY, testContractAddress, ExecutionOptions.None);
+
+      const calldata = roles.interface.encodeFunctionData(
+        "execTransactionWithRole",
+        [
+          testContractAddress,
+          0,
+          testContract.interface.encodeFunctionData("doNothing"),
+          0,
+          ROLE_KEY,
+          true,
+        ],
+      );
+
+      await expect(
+        alice.sendTransaction({
+          to: await roles.getAddress(),
+          data: appendContractSignature(calldata, signerAddress),
+        }),
+      ).to.be.revertedWithCustomError(roles, "NotAuthorized");
     });
   });
 

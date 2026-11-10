@@ -14,12 +14,12 @@ contract MultiSendUnwrapper is ITransactionUnwrapper {
         address,
         uint256 value,
         bytes calldata data,
-        Operation operation
+        Enum.Operation operation
     ) external pure returns (UnwrappedTransaction[] memory) {
         if (value != 0) {
             revert UnsupportedMode();
         }
-        if (operation != Operation.DelegateCall) {
+        if (operation != Enum.Operation.DelegateCall) {
             revert UnsupportedMode();
         }
         _validateHeader(data);
@@ -54,9 +54,9 @@ contract MultiSendUnwrapper is ITransactionUnwrapper {
         bytes calldata data
     ) private pure returns (uint256 count) {
         uint256 offset = OFFSET_START;
-        uint256 end = OFFSET_START + uint256(bytes32(data[36:]));
 
-        for (; offset < end; ) {
+        // data is padded to 32 bytes we can't simply do offset < data.length
+        for (; offset + 32 < data.length; ) {
             // Per transaction:
             // Operation   1  bytes
             // To          20 bytes
@@ -69,7 +69,7 @@ contract MultiSendUnwrapper is ITransactionUnwrapper {
             }
 
             uint256 length = uint256(bytes32(data[offset + 53:]));
-            if (offset + 85 + length > end) {
+            if (offset + 85 + length > data.length) {
                 revert MalformedBody();
             }
 
@@ -90,7 +90,7 @@ contract MultiSendUnwrapper is ITransactionUnwrapper {
 
         uint256 offset = OFFSET_START;
         for (uint256 i; i < count; ) {
-            result[i].operation = Operation(uint8(bytes1(data[offset:])));
+            result[i].operation = Enum.Operation(uint8(bytes1(data[offset:])));
             offset += 1;
 
             result[i].to = address(bytes20(data[offset:]));

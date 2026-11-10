@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 pragma solidity >=0.8.17 <0.9.0;
 
-import "@gnosis-guild/zodiac-core/contracts/core/Modifier.sol";
+import "@gnosis.pm/zodiac/contracts/core/Modifier.sol";
 
 import "./BufferPacker.sol";
 
@@ -67,14 +67,14 @@ library Packer {
         ConditionFlat[] memory conditions,
         uint256 index
     ) private pure returns (bool) {
-        AbiType paramType = conditions[index].paramType;
-        if (paramType == AbiType.Static) {
+        ParameterType paramType = conditions[index].paramType;
+        if (paramType == ParameterType.Static) {
             return true;
         } else if (
-            paramType == AbiType.Dynamic ||
-            paramType == AbiType.Array ||
-            paramType == AbiType.Calldata ||
-            paramType == AbiType.AbiEncoded
+            paramType == ParameterType.Dynamic ||
+            paramType == ParameterType.Array ||
+            paramType == ParameterType.Calldata ||
+            paramType == ParameterType.AbiEncoded
         ) {
             return false;
         } else {

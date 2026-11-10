@@ -1,16 +1,19 @@
 import hre from "hardhat";
+import assert from "assert";
 import { expect } from "chai";
 import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
-import { AbiCoder, Interface } from "ethers";
 
-import { AbiType, flattenCondition, Operator } from "../utils";
+import { AddressOne } from "@gnosis.pm/safe-contracts";
+import { AbiCoder } from "ethers";
 
-const AddressOne = "0x0000000000000000000000000000000000000001";
-const YesRemoveOffset = true;
-const DontRemoveOffset = false;
+import { Operator, AbiType } from "../utils";
+
 const defaultAbiCoder = AbiCoder.defaultAbiCoder();
 
-describe("AbiDecoder library", async () => {
+const YesRemoveOffset = true;
+const DontRemoveOffset = false;
+
+describe("Decoder library", async () => {
   async function setup() {
     const TestEncoder = await hre.ethers.getContractFactory("TestEncoder");
     const testEncoder = await TestEncoder.deploy();
@@ -24,673 +27,14 @@ describe("AbiDecoder library", async () => {
     };
   }
 
-  describe("TypeTree", async () => {
-    it("top level variants get unfolded to its entrypoint form", async () => {
-      const { decoder, testEncoder } = await loadFixture(setup);
-
-      const { data } = await testEncoder.staticDynamic.populateTransaction(
-        123,
-        "0xaabbccddeeff",
-      );
-
-      const conditions = flattenCondition({
-        paramType: AbiType.None,
-        operator: Operator.Or,
-        children: [
-          {
-            paramType: AbiType.Calldata,
-            operator: Operator.Matches,
-            children: [
-              {
-                paramType: AbiType.Static,
-                operator: Operator.Pass,
-                children: [],
-              },
-              {
-                paramType: AbiType.Dynamic,
-                operator: Operator.EqualTo,
-                children: [],
-              },
-            ],
-          },
-          {
-            paramType: AbiType.Calldata,
-            operator: Operator.Matches,
-            children: [
-              {
-                paramType: AbiType.Static,
-                operator: Operator.EqualTo,
-                children: [],
-              },
-              {
-                paramType: AbiType.Dynamic,
-                operator: Operator.EqualTo,
-                children: [],
-              },
-            ],
-          },
-          {
-            paramType: AbiType.Calldata,
-            operator: Operator.Matches,
-            children: [
-              {
-                paramType: AbiType.Static,
-                operator: Operator.EqualTo,
-                children: [],
-              },
-              {
-                paramType: AbiType.Dynamic,
-                operator: Operator.EqualTo,
-                children: [],
-              },
-            ],
-          },
-        ],
-      });
-
-      const result = await decoder.inspect(data, conditions);
-      expect(await decoder.pluck(data, result.location, result.size)).to.equal(
-        data,
-      );
-
-      const firstParam = result.children[0];
-      expect(
-        await decoder.pluck(data, firstParam.location, firstParam.size),
-      ).to.equal(encode(["uint256"], [123]));
-
-      const secondParam = result.children[1];
-      expect(
-        await decoder.pluck(data, secondParam.location, secondParam.size),
-      ).to.equal(encode(["bytes"], ["0xaabbccddeeff"], YesRemoveOffset));
-    });
-    it("And gets unfolded to Static", async () => {
-      const { decoder, testEncoder } = await loadFixture(setup);
-
-      const { data } =
-        await testEncoder.staticFn.populateTransaction("0xeeff3344");
-
-      const conditions = flattenCondition({
-        paramType: AbiType.Calldata,
-        operator: Operator.Matches,
-        children: [
-          {
-            paramType: AbiType.None,
-            operator: Operator.And,
-            children: [
-              {
-                paramType: AbiType.Static,
-                operator: Operator.EqualTo,
-                children: [],
-              },
-              {
-                paramType: AbiType.Static,
-                operator: Operator.EqualTo,
-                children: [],
-              },
-            ],
-          },
-        ],
-      });
-
-      const result = await decoder.inspect(data, conditions);
-      const staticField = result.children[0];
-      expect(
-        await decoder.pluck(data, staticField.location, staticField.size),
-      ).to.equal(encode(["bytes4"], ["0xeeff3344"], DontRemoveOffset));
-    });
-    it("Or gets unfolded to Array - From Tuple", async () => {
-      const { decoder, testEncoder } = await loadFixture(setup);
-
-      const { data } = await testEncoder.dynamicTuple.populateTransaction({
-        dynamic: "0xaabb",
-        _static: 88221,
-        dynamic32: [1, 2, 3, 4, 5],
-      });
-
-      const conditions = flattenCondition({
-        paramType: AbiType.Calldata,
-        operator: Operator.Matches,
-        children: [
-          {
-            paramType: AbiType.Tuple,
-            operator: Operator.Matches,
-            children: [
-              {
-                paramType: AbiType.Dynamic,
-                operator: Operator.Pass,
-                children: [],
-              },
-              {
-                paramType: AbiType.Static,
-                operator: Operator.Pass,
-                children: [],
-              },
-              {
-                paramType: AbiType.None,
-                operator: Operator.Or,
-                children: [
-                  {
-                    paramType: AbiType.Array,
-                    operator: Operator.EqualTo,
-                    children: [
-                      {
-                        paramType: AbiType.Static,
-                        operator: Operator.EqualTo,
-                        children: [],
-                      },
-                    ],
-                  },
-                  {
-                    paramType: AbiType.Array,
-                    operator: Operator.EqualTo,
-                    children: [
-                      {
-                        paramType: AbiType.Static,
-                        operator: Operator.EqualTo,
-                        children: [],
-                      },
-                    ],
-                  },
-                ],
-              },
-            ],
-          },
-        ],
-      });
-
-      const result = await decoder.inspect(data, conditions);
-
-      const tupleField = result.children[0];
-      expect(
-        await decoder.pluck(data, tupleField.location, tupleField.size),
-      ).to.equal(
-        encode(
-          ["tuple(bytes,uint256,uint256[])"],
-          [["0xaabb", 88221, [1, 2, 3, 4, 5]]],
-          YesRemoveOffset,
-        ),
-      );
-
-      const arrayField = result.children[0].children[2];
-      expect(
-        await decoder.pluck(data, arrayField.location, arrayField.size),
-      ).to.equal(encode(["uint256[]"], [[1, 2, 3, 4, 5]], YesRemoveOffset));
-    });
-    it("Or gets unfolded to Static - From Array", async () => {
-      const { decoder, testEncoder } = await loadFixture(setup);
-
-      const { data } = await testEncoder.dynamicTuple.populateTransaction({
-        dynamic: "0xaabb",
-        _static: 88221,
-        dynamic32: [7, 8, 9],
-      });
-
-      const conditions = flattenCondition({
-        paramType: AbiType.Calldata,
-        operator: Operator.Matches,
-        children: [
-          {
-            paramType: AbiType.Tuple,
-            operator: Operator.Matches,
-            children: [
-              {
-                paramType: AbiType.Dynamic,
-                operator: Operator.Pass,
-                children: [],
-              },
-              {
-                paramType: AbiType.Static,
-                operator: Operator.Pass,
-                children: [],
-              },
-              {
-                paramType: AbiType.Array,
-                operator: Operator.EqualTo,
-                children: [
-                  {
-                    paramType: AbiType.None,
-                    operator: Operator.Or,
-                    children: [
-                      {
-                        paramType: AbiType.Static,
-                        operator: Operator.EqualTo,
-                        children: [],
-                      },
-                      {
-                        paramType: AbiType.Static,
-                        operator: Operator.EqualTo,
-                        children: [],
-                      },
-                    ],
-                  },
-                ],
-              },
-            ],
-          },
-        ],
-      });
-
-      const result = await decoder.inspect(data, conditions);
-
-      const tupleField = result.children[0];
-      expect(
-        await decoder.pluck(data, tupleField.location, tupleField.size),
-      ).to.equal(
-        encode(
-          ["tuple(bytes,uint256,uint256[])"],
-          [["0xaabb", 88221, [7, 8, 9]]],
-          YesRemoveOffset,
-        ),
-      );
-
-      const arrayField = result.children[0].children[2];
-      expect(
-        await decoder.pluck(data, arrayField.location, arrayField.size),
-      ).to.equal(encode(["uint256[]"], [[7, 8, 9]], YesRemoveOffset));
-    });
-    it("EtherWithinAllowance gets inspected as None", async () => {
-      const { decoder, testEncoder } = await loadFixture(setup);
-      const { data } =
-        await testEncoder.staticFn.populateTransaction("0xeeff3344");
-
-      const conditions = flattenCondition({
-        paramType: AbiType.Calldata,
-        operator: Operator.Matches,
-        children: [
-          {
-            paramType: AbiType.None,
-            operator: Operator.EtherWithinAllowance,
-            children: [],
-          },
-          {
-            paramType: AbiType.Static,
-            operator: Operator.EqualTo,
-            children: [],
-          },
-        ],
-      });
-
-      const result = await decoder.inspect(data, conditions);
-
-      const [extraneousField, staticField] = result.children;
-      expect(extraneousField.location).to.equal(4);
-      expect(extraneousField.size).to.equal(0);
-      expect(staticField.location).to.equal(4);
-      expect(staticField.size).to.equal(32);
-    });
-    it("CallWithinAllowance gets inspected as None", async () => {
-      const { decoder, testEncoder } = await loadFixture(setup);
-      const { data } =
-        await testEncoder.staticFn.populateTransaction("0xeeff3344");
-
-      const conditions = flattenCondition({
-        paramType: AbiType.Calldata,
-        operator: Operator.Matches,
-        children: [
-          {
-            paramType: AbiType.None,
-            operator: Operator.CallWithinAllowance,
-            children: [],
-          },
-          {
-            paramType: AbiType.Static,
-            operator: Operator.EqualTo,
-            children: [],
-          },
-        ],
-      });
-
-      const result = await decoder.inspect(data, conditions);
-
-      const [extraneousField, staticField] = result.children;
-
-      expect(extraneousField.location).to.equal(4);
-      expect(extraneousField.size).to.equal(0);
-      expect(staticField.location).to.equal(4);
-      expect(staticField.size).to.equal(32);
-    });
-  });
-
-  describe("Misc - old tests", async () => {
-    it("plucks Dynamic from top level", async () => {
-      const { decoder, testEncoder } = await loadFixture(setup);
-
-      const { data } =
-        await testEncoder.dynamic32DynamicStatic.populateTransaction(
-          [],
-          "Hello World!",
-          123456789,
-        );
-
-      const conditions = flattenCondition({
-        paramType: AbiType.Calldata,
-        operator: Operator.Matches,
-        children: [
-          {
-            paramType: AbiType.Array,
-            operator: Operator.Pass,
-            children: [
-              {
-                paramType: AbiType.Static,
-                operator: Operator.Pass,
-                children: [],
-              },
-            ],
-          },
-          {
-            paramType: AbiType.Dynamic,
-            operator: Operator.Pass,
-            children: [],
-          },
-          {
-            paramType: AbiType.Static,
-            operator: Operator.Pass,
-            children: [],
-          },
-        ],
-      });
-
-      const result = await decoder.inspect(data, conditions);
-
-      expect(
-        await decoder.pluck(
-          data,
-          result.children[1].location,
-          result.children[1].size,
-        ),
-      ).to.equal(encode(["string"], ["Hello World!"], YesRemoveOffset));
-    });
-    it("plucks Dynamic from Tuple", async () => {
-      const { decoder, testEncoder } = await loadFixture(setup);
-
-      const { data } = await testEncoder._dynamicTuple.populateTransaction({
-        dynamic: "0xabcd0011",
-      });
-
-      const conditions = flattenCondition({
-        paramType: AbiType.Calldata,
-        operator: Operator.Matches,
-        children: [
-          {
-            paramType: AbiType.Tuple,
-            operator: Operator.Pass,
-            children: [
-              {
-                paramType: AbiType.Dynamic,
-                operator: Operator.Pass,
-                children: [],
-              },
-            ],
-          },
-        ],
-      });
-
-      const result = await decoder.inspect(data, conditions);
-
-      expect(
-        await decoder.pluck(
-          data,
-          result.children[0].location,
-          result.children[0].size,
-        ),
-      ).to.equal(encode(["tuple(bytes)"], [["0xabcd0011"]], YesRemoveOffset));
-    });
-    it("plucks Dynamic from Array", async () => {
-      const { decoder, testEncoder } = await loadFixture(setup);
-
-      const { data } = await testEncoder.dynamicArray.populateTransaction([
-        "0xaabbccdd",
-        "0x004466ff",
-      ]);
-
-      const conditions = flattenCondition({
-        paramType: AbiType.Calldata,
-        operator: Operator.Matches,
-        children: [
-          {
-            paramType: AbiType.Array,
-            operator: Operator.Pass,
-            children: [
-              {
-                paramType: AbiType.Dynamic,
-                operator: Operator.Pass,
-                children: [],
-              },
-            ],
-          },
-        ],
-      });
-
-      const result = await decoder.inspect(data as string, conditions);
-
-      const arrayElement0 = result.children[0].children[0];
-      const arrayElement1 = result.children[0].children[1];
-      expect(
-        await decoder.pluck(
-          data as string,
-          arrayElement0.location,
-          arrayElement0.size,
-        ),
-      ).to.equal(encode(["bytes"], ["0xaabbccdd"], YesRemoveOffset));
-
-      expect(
-        await decoder.pluck(
-          data as string,
-          arrayElement1.location,
-          arrayElement1.size,
-        ),
-      ).to.equal(encode(["bytes"], ["0x004466ff"], YesRemoveOffset));
-    });
-    it("plucks Dynamic from embedded Calldata", async () => {
-      const { decoder } = await loadFixture(setup);
-
-      const iface = new Interface([
-        "function fnOut(tuple(bytes) a)",
-        "function fnIn(bytes a, bool b, bytes2[] c)",
-      ]);
-      const embedded = iface.encodeFunctionData("fnIn", [
-        "0xbadfed",
-        true,
-        ["0xccdd"],
-      ]);
-
-      const dynamicTupleValue = [embedded];
-      const data = iface.encodeFunctionData("fnOut", [dynamicTupleValue]);
-
-      const conditions = flattenCondition({
-        paramType: AbiType.Calldata,
-        operator: Operator.Matches,
-        children: [
-          {
-            paramType: AbiType.Tuple,
-            operator: Operator.Pass,
-            children: [
-              {
-                paramType: AbiType.Calldata,
-                operator: Operator.Matches,
-                children: [
-                  {
-                    paramType: AbiType.Dynamic,
-                    operator: Operator.Pass,
-                    children: [],
-                  },
-                  {
-                    paramType: AbiType.Static,
-                    operator: Operator.Pass,
-                    children: [],
-                  },
-                  {
-                    paramType: AbiType.Array,
-                    operator: Operator.Pass,
-                    children: [
-                      {
-                        paramType: AbiType.Static,
-                        operator: Operator.Pass,
-                        children: [],
-                      },
-                    ],
-                  },
-                ],
-              },
-            ],
-          },
-        ],
-      });
-
-      const result = await decoder.inspect(data as string, conditions);
-
-      const tupleField = result.children[0].children[0].children[0];
-      expect(
-        await decoder.pluck(
-          data as string,
-          tupleField.location,
-          tupleField.size,
-        ),
-      ).to.equal(encode(["bytes"], ["0xbadfed"], YesRemoveOffset));
-    });
-    it("plucks Dynamic from embedded AbiEncoded", async () => {
-      const { decoder } = await loadFixture(setup);
-
-      const iface = new Interface(["function fn(bytes a)"]);
-      const embedded = defaultAbiCoder.encode(
-        ["bytes", "bool", "bytes2[]"],
-        ["0xbadfed", true, ["0xccdd", "0x3333"]],
-      );
-
-      const data = iface.encodeFunctionData("fn", [embedded]);
-
-      const conditions = flattenCondition({
-        paramType: AbiType.Calldata,
-        operator: Operator.Matches,
-        children: [
-          {
-            paramType: AbiType.AbiEncoded,
-            operator: Operator.Matches,
-            children: [
-              {
-                paramType: AbiType.Dynamic,
-                operator: Operator.Pass,
-                children: [],
-              },
-              {
-                paramType: AbiType.Static,
-                operator: Operator.Pass,
-                children: [],
-              },
-              {
-                paramType: AbiType.Array,
-                operator: Operator.Pass,
-                children: [
-                  {
-                    paramType: AbiType.Static,
-                    operator: Operator.Pass,
-                    children: [],
-                  },
-                ],
-              },
-            ],
-          },
-        ],
-      });
-
-      const result = await decoder.inspect(data as string, conditions);
-
-      const field1 = result.children[0].children[0];
-      expect(
-        await decoder.pluck(data as string, field1.location, field1.size),
-      ).to.equal(encode(["bytes"], ["0xbadfed"], YesRemoveOffset));
-
-      const field2 = result.children[0].children[1];
-      expect(
-        await decoder.pluck(data as string, field2.location, field2.size),
-      ).to.equal(encode(["bool"], ["false"]));
-
-      const field3 = result.children[0].children[2];
-      expect(
-        await decoder.pluck(data as string, field3.location, field3.size),
-      ).to.equal(encode(["bytes2[]"], [["0xccdd", "0x3333"]], YesRemoveOffset));
-    });
-    it("plucks Dynamic from type equivalent branch", async () => {
-      const { decoder } = await loadFixture(setup);
-
-      const iface = new Interface([
-        "function fnOut(bytes a)",
-        "function fnIn(uint256 a, uint256 b)",
-      ]);
-
-      const data = iface.encodeFunctionData("fnOut", [
-        iface.encodeFunctionData("fnIn", [1234, 9876]),
-      ]);
-
-      const conditions = flattenCondition({
-        paramType: AbiType.Calldata,
-        operator: Operator.Matches,
-        children: [
-          {
-            paramType: AbiType.None,
-            operator: Operator.And,
-            children: [
-              {
-                paramType: AbiType.Calldata,
-                operator: Operator.Matches,
-                children: [
-                  {
-                    paramType: AbiType.Static,
-                    operator: Operator.Pass,
-                    children: [],
-                  },
-                  {
-                    paramType: AbiType.Static,
-                    operator: Operator.Pass,
-                    children: [],
-                  },
-                ],
-              },
-              {
-                paramType: AbiType.Dynamic,
-                operator: Operator.Bitmask,
-                children: [],
-              },
-            ],
-          },
-        ],
-      });
-
-      const result = await decoder.inspect(data as string, conditions);
-
-      const all = result;
-      const embedded = result.children[0];
-      const arg1 = result.children[0].children[0];
-      const arg2 = result.children[0].children[1];
-
-      expect(
-        await decoder.pluck(data as string, all.location, all.size),
-      ).to.equal(data);
-
-      expect(
-        await decoder.pluck(data as string, embedded.location, embedded.size),
-      ).to.equal(
-        encode(
-          ["bytes"],
-          [iface.encodeFunctionData("fnIn", [1234, 9876])],
-          YesRemoveOffset,
-        ),
-      );
-
-      expect(
-        await decoder.pluck(data as string, arg1.location, arg1.size),
-      ).to.equal(encode(["uint256"], [1234]));
-
-      expect(
-        await decoder.pluck(data as string, arg2.location, arg2.size),
-      ).to.equal(encode(["uint256"], [9876]));
-    });
+  describe("old decoder tests", async () => {
     it("plucks (dynamic) empty buffer from encoded caldata", async () => {
       const { testEncoder, decoder } = await loadFixture(setup);
 
       const { data } = await testEncoder.dynamic.populateTransaction("0x");
+      assert(data);
 
-      const conditions = flattenCondition({
+      const layout = {
         paramType: AbiType.Calldata,
         operator: Operator.Matches,
         children: [
@@ -700,9 +44,9 @@ describe("AbiDecoder library", async () => {
             children: [],
           },
         ],
-      });
+      };
 
-      const result = await decoder.inspect(data, conditions);
+      const result = await decoder.inspect(data, layout);
       expect(result.location).to.equal(BigInt(0));
       expect(result.size).to.equal(BigInt((data.length - 2) / 2));
 
@@ -724,8 +68,9 @@ describe("AbiDecoder library", async () => {
           "0xabcd",
           [10, 32, 55],
         );
+      assert(data);
 
-      const condition = flattenCondition({
+      const layout = {
         paramType: AbiType.Calldata,
         operator: Operator.Matches,
         children: [
@@ -751,8 +96,8 @@ describe("AbiDecoder library", async () => {
             ],
           },
         ],
-      });
-      const result = await decoder.inspect(data, condition);
+      };
+      const result = await decoder.inspect(data, layout);
 
       expect(
         await decoder.pluck(
@@ -790,7 +135,9 @@ describe("AbiDecoder library", async () => {
           ["0x1122", "0x3344", "0x5566"],
         );
 
-      const condition = flattenCondition({
+      assert(data);
+
+      const layout = {
         paramType: AbiType.Calldata,
         operator: Operator.Matches,
         children: [
@@ -816,9 +163,9 @@ describe("AbiDecoder library", async () => {
             ],
           },
         ],
-      });
+      };
 
-      const result = await decoder.inspect(data, condition);
+      const result = await decoder.inspect(data, layout);
       expect(
         await decoder.pluck(
           data,
@@ -857,7 +204,9 @@ describe("AbiDecoder library", async () => {
           123456789,
         );
 
-      const conditions = flattenCondition({
+      assert(data);
+
+      const layout = {
         paramType: AbiType.Calldata,
         operator: Operator.Matches,
         children: [
@@ -883,9 +232,9 @@ describe("AbiDecoder library", async () => {
             children: [],
           },
         ],
-      });
+      };
 
-      const result = await decoder.inspect(data, conditions);
+      const result = await decoder.inspect(data, layout);
       expect(
         await decoder.pluck(
           data,
@@ -919,7 +268,8 @@ describe("AbiDecoder library", async () => {
         dynamic: "0xabcd",
       });
 
-      const conditions = flattenCondition({
+      assert(data);
+      const layout = {
         paramType: AbiType.Calldata,
         operator: Operator.Matches,
         children: [
@@ -935,9 +285,9 @@ describe("AbiDecoder library", async () => {
             ],
           },
         ],
-      });
+      };
 
-      const result = await decoder.inspect(data, conditions);
+      const result = await decoder.inspect(data, layout);
 
       expect(
         await decoder.pluck(
@@ -966,7 +316,9 @@ describe("AbiDecoder library", async () => {
         2000,
       );
 
-      const conditions = flattenCondition({
+      assert(data);
+
+      const layout = {
         paramType: AbiType.Calldata,
         operator: Operator.Matches,
         children: [
@@ -992,9 +344,9 @@ describe("AbiDecoder library", async () => {
             children: [],
           },
         ],
-      });
+      };
 
-      const result = await decoder.inspect(data as string, conditions);
+      const result = await decoder.inspect(data as string, layout);
 
       expect(
         await decoder.pluck(
@@ -1029,7 +381,9 @@ describe("AbiDecoder library", async () => {
         2000,
       );
 
-      const conditions = flattenCondition({
+      assert(data);
+
+      const layout = {
         paramType: AbiType.Calldata,
         operator: Operator.Matches,
         children: [
@@ -1049,9 +403,9 @@ describe("AbiDecoder library", async () => {
             children: [],
           },
         ],
-      });
+      };
 
-      const result = await decoder.inspect(data as string, conditions);
+      const result = await decoder.inspect(data as string, layout);
 
       expect(
         await decoder.pluck(
@@ -1097,7 +451,7 @@ describe("AbiDecoder library", async () => {
         false,
       );
 
-      const conditions = flattenCondition({
+      const layout = {
         paramType: AbiType.Calldata,
         operator: Operator.Matches,
         children: [
@@ -1134,9 +488,11 @@ describe("AbiDecoder library", async () => {
             ],
           },
         ],
-      });
+      };
 
-      const result = await decoder.inspect(data, conditions);
+      assert(data);
+
+      const result = await decoder.inspect(data, layout);
       expect(
         await decoder.pluck(
           data,
@@ -1174,7 +530,9 @@ describe("AbiDecoder library", async () => {
           },
         );
 
-      const conditions = flattenCondition({
+      assert(data);
+
+      const layout = {
         paramType: AbiType.Calldata,
         operator: Operator.Matches,
         children: [
@@ -1238,9 +596,9 @@ describe("AbiDecoder library", async () => {
             ],
           },
         ],
-      });
+      };
 
-      const result = await decoder.inspect(data as string, conditions);
+      const result = await decoder.inspect(data as string, layout);
 
       const expected = encode(
         [
@@ -1312,7 +670,9 @@ describe("AbiDecoder library", async () => {
           c: [{ a: 10, b: "0x71C7656EC7ab88b098defB751B7401B5f6d8976F" }],
         });
 
-      const conditions = flattenCondition({
+      assert(data);
+
+      const layout = {
         paramType: AbiType.Calldata,
         operator: Operator.Matches,
         children: [
@@ -1355,8 +715,8 @@ describe("AbiDecoder library", async () => {
             ],
           },
         ],
-      });
-      const result = await decoder.inspect(data, conditions);
+      };
+      const result = await decoder.inspect(data, layout);
 
       // check root
       expect(await decoder.pluck(data, result.location, result.size)).to.equal(
@@ -1397,7 +757,7 @@ describe("AbiDecoder library", async () => {
           },
         ]);
 
-      const conditions = flattenCondition({
+      const layout = {
         paramType: AbiType.Calldata,
         operator: Operator.Matches,
         children: [
@@ -1424,8 +784,8 @@ describe("AbiDecoder library", async () => {
             ],
           },
         ],
-      });
-      const result = await decoder.inspect(data as string, conditions);
+      };
+      const result = await decoder.inspect(data as string, layout);
 
       // check root
       expect(
@@ -1500,7 +860,7 @@ describe("AbiDecoder library", async () => {
           },
         ]);
 
-      const conditions = flattenCondition({
+      const layout = {
         paramType: AbiType.Calldata,
         operator: Operator.Matches,
         children: [
@@ -1538,8 +898,9 @@ describe("AbiDecoder library", async () => {
             ],
           },
         ],
-      });
-      const result = await decoder.inspect(data, conditions);
+      };
+      assert(data);
+      const result = await decoder.inspect(data, layout);
 
       // check root
       expect(await decoder.pluck(data, result.location, result.size)).to.equal(
@@ -1617,7 +978,7 @@ describe("AbiDecoder library", async () => {
           [],
         );
 
-      const conditions = flattenCondition({
+      const layout = {
         paramType: AbiType.Calldata,
         operator: Operator.Matches,
         children: [
@@ -1649,9 +1010,9 @@ describe("AbiDecoder library", async () => {
             ],
           },
         ],
-      });
+      };
 
-      const result = await decoder.inspect(data as string, conditions);
+      const result = await decoder.inspect(data as string, layout);
 
       // check the nested uint
       const nestedUintField = result.children[1].children[0];
@@ -1713,7 +1074,7 @@ describe("AbiDecoder library", async () => {
         ],
       };
 
-      const conditions = flattenCondition({
+      const layout = {
         paramType: AbiType.Calldata,
         operator: Operator.Matches,
         children: [
@@ -1741,9 +1102,9 @@ describe("AbiDecoder library", async () => {
             ],
           },
         ],
-      });
+      };
 
-      const result = await decoder.inspect(data as string, conditions);
+      const result = await decoder.inspect(data as string, layout);
 
       const nestedDynamicField =
         result.children[0].children[0].children[0].children[0];
@@ -1792,6 +1153,9 @@ describe("AbiDecoder library", async () => {
           [],
         );
 
+      assert(nestedData1);
+      assert(nestedData2);
+
       const { data } = await testEncoder.dynamicArray.populateTransaction([
         nestedData1,
         nestedData2,
@@ -1825,7 +1189,7 @@ describe("AbiDecoder library", async () => {
         ],
       };
 
-      const conditions = flattenCondition({
+      const layout = {
         paramType: AbiType.Calldata,
         operator: Operator.Matches,
         children: [
@@ -1835,9 +1199,9 @@ describe("AbiDecoder library", async () => {
             children: [nestedLayout],
           },
         ],
-      });
+      };
 
-      const result = await decoder.inspect(data as string, conditions);
+      const result = await decoder.inspect(data as string, layout);
 
       const arrayField1 = result.children[0].children[0].children[2];
       expect(
