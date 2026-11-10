@@ -46,14 +46,14 @@ library Integrity {
 
     function _node(ConditionFlat memory condition, uint256 index) private pure {
         Operator operator = condition.operator;
-        AbiType _type = condition.paramType;
+        ParameterType paramType = condition.paramType;
         bytes memory compValue = condition.compValue;
         if (operator == Operator.Pass) {
             if (condition.compValue.length != 0) {
                 revert UnsuitableCompValue(index);
             }
         } else if (operator >= Operator.And && operator <= Operator.Nor) {
-            if (_type != AbiType.None) {
+            if (paramType != ParameterType.None) {
                 revert UnsuitableParameterType(index);
             }
             if (condition.compValue.length != 0) {
@@ -61,10 +61,10 @@ library Integrity {
             }
         } else if (operator == Operator.Matches) {
             if (
-                _type != AbiType.Tuple &&
-                _type != AbiType.Array &&
-                _type != AbiType.Calldata &&
-                _type != AbiType.AbiEncoded
+                paramType != ParameterType.Tuple &&
+                paramType != ParameterType.Array &&
+                paramType != ParameterType.Calldata &&
+                paramType != ParameterType.AbiEncoded
             ) {
                 revert UnsuitableParameterType(index);
             }
@@ -76,14 +76,14 @@ library Integrity {
             operator == Operator.ArrayEvery ||
             operator == Operator.ArraySubset
         ) {
-            if (_type != AbiType.Array) {
+            if (paramType != ParameterType.Array) {
                 revert UnsuitableParameterType(index);
             }
             if (compValue.length != 0) {
                 revert UnsuitableCompValue(index);
             }
         } else if (operator == Operator.EqualToAvatar) {
-            if (_type != AbiType.Static) {
+            if (paramType != ParameterType.Static) {
                 revert UnsuitableParameterType(index);
             }
             if (compValue.length != 0) {
@@ -91,10 +91,10 @@ library Integrity {
             }
         } else if (operator == Operator.EqualTo) {
             if (
-                _type != AbiType.Static &&
-                _type != AbiType.Dynamic &&
-                _type != AbiType.Tuple &&
-                _type != AbiType.Array
+                paramType != ParameterType.Static &&
+                paramType != ParameterType.Dynamic &&
+                paramType != ParameterType.Tuple &&
+                paramType != ParameterType.Array
             ) {
                 revert UnsuitableParameterType(index);
             }
@@ -107,14 +107,17 @@ library Integrity {
             operator == Operator.SignedIntGreaterThan ||
             operator == Operator.SignedIntLessThan
         ) {
-            if (_type != AbiType.Static) {
+            if (paramType != ParameterType.Static) {
                 revert UnsuitableParameterType(index);
             }
             if (compValue.length != 32) {
                 revert UnsuitableCompValue(index);
             }
         } else if (operator == Operator.Bitmask) {
-            if (_type != AbiType.Static && _type != AbiType.Dynamic) {
+            if (
+                paramType != ParameterType.Static &&
+                paramType != ParameterType.Dynamic
+            ) {
                 revert UnsuitableParameterType(index);
             }
             if (compValue.length != 32) {
@@ -125,7 +128,7 @@ library Integrity {
                 revert UnsuitableCompValue(index);
             }
         } else if (operator == Operator.WithinAllowance) {
-            if (_type != AbiType.Static) {
+            if (paramType != ParameterType.Static) {
                 revert UnsuitableParameterType(index);
             }
             if (compValue.length != 32) {
@@ -135,7 +138,7 @@ library Integrity {
             operator == Operator.EtherWithinAllowance ||
             operator == Operator.CallWithinAllowance
         ) {
-            if (_type != AbiType.None) {
+            if (paramType != ParameterType.None) {
                 revert UnsuitableParameterType(index);
             }
             if (compValue.length != 32) {
@@ -159,7 +162,8 @@ library Integrity {
             if (
                 (conditions[i].operator == Operator.EtherWithinAllowance ||
                     conditions[i].operator == Operator.CallWithinAllowance) &&
-                conditions[conditions[i].parent].paramType != AbiType.Calldata
+                conditions[conditions[i].parent].paramType !=
+                ParameterType.Calldata
             ) {
                 revert UnsuitableParent(i);
             }
@@ -173,7 +177,7 @@ library Integrity {
             ConditionFlat memory condition = conditions[i];
             Topology.Bounds memory childBounds = childrenBounds[i];
 
-            if (condition.paramType == AbiType.None) {
+            if (condition.paramType == ParameterType.None) {
                 if (
                     (condition.operator == Operator.EtherWithinAllowance ||
                         condition.operator == Operator.CallWithinAllowance) &&
@@ -190,22 +194,22 @@ library Integrity {
                     }
                 }
             } else if (
-                condition.paramType == AbiType.Static ||
-                condition.paramType == AbiType.Dynamic
+                condition.paramType == ParameterType.Static ||
+                condition.paramType == ParameterType.Dynamic
             ) {
                 if (childBounds.length != 0) {
                     revert UnsuitableChildCount(i);
                 }
             } else if (
-                condition.paramType == AbiType.Tuple ||
-                condition.paramType == AbiType.Calldata ||
-                condition.paramType == AbiType.AbiEncoded
+                condition.paramType == ParameterType.Tuple ||
+                condition.paramType == ParameterType.Calldata ||
+                condition.paramType == ParameterType.AbiEncoded
             ) {
                 if (childBounds.length == 0) {
                     revert UnsuitableChildCount(i);
                 }
             } else {
-                assert(condition.paramType == AbiType.Array);
+                assert(condition.paramType == ParameterType.Array);
 
                 if (childBounds.length == 0) {
                     revert UnsuitableChildCount(i);
@@ -231,20 +235,20 @@ library Integrity {
             if (
                 ((condition.operator >= Operator.And &&
                     condition.operator <= Operator.Nor) ||
-                    condition.paramType == AbiType.Array) &&
+                    condition.paramType == ParameterType.Array) &&
                 childrenBounds[i].length > 1
             ) {
                 _compatibleSiblingTypes(conditions, i, childrenBounds);
             }
         }
 
-        AbiTypeTree[] memory typeTree = Topology.typeTree(
+        Topology.TypeTree memory typeTree = Topology.typeTree(
             conditions,
             0,
             childrenBounds
         );
 
-        if (typeTree[0]._type != AbiType.Calldata) {
+        if (typeTree.paramType != ParameterType.Calldata) {
             revert UnsuitableRootNode();
         }
     }
@@ -274,8 +278,8 @@ library Integrity {
         Topology.Bounds[] memory childrenBounds
     ) private pure returns (bool) {
         return
-            typeTreeId(Topology.typeTree(conditions, i, childrenBounds), 0) ==
-            typeTreeId(Topology.typeTree(conditions, j, childrenBounds), 0);
+            typeTreeId(Topology.typeTree(conditions, i, childrenBounds)) ==
+            typeTreeId(Topology.typeTree(conditions, j, childrenBounds));
     }
 
     function _isTypeEquivalent(
@@ -284,29 +288,29 @@ library Integrity {
         uint256 j,
         Topology.Bounds[] memory childrenBounds
     ) private pure returns (bool) {
-        AbiType leftType = Topology
-        .typeTree(conditions, i, childrenBounds)[0]._type;
+        ParameterType leftParamType = Topology
+            .typeTree(conditions, i, childrenBounds)
+            .paramType;
         return
-            (leftType == AbiType.Calldata || leftType == AbiType.AbiEncoded) &&
-            Topology.typeTree(conditions, j, childrenBounds)[0]._type ==
-            AbiType.Dynamic;
+            (leftParamType == ParameterType.Calldata ||
+                leftParamType == ParameterType.AbiEncoded) &&
+            Topology.typeTree(conditions, j, childrenBounds).paramType ==
+            ParameterType.Dynamic;
     }
 
     function typeTreeId(
-        AbiTypeTree[] memory typeTree,
-        uint256 index
+        Topology.TypeTree memory node
     ) private pure returns (bytes32) {
-        AbiTypeTree memory node = typeTree[index];
-        uint256 childCount = node.fields.length;
+        uint256 childCount = node.children.length;
         if (childCount > 0) {
-            bytes32[] memory ids = new bytes32[](childCount);
+            bytes32[] memory ids = new bytes32[](node.children.length);
             for (uint256 i = 0; i < childCount; ++i) {
-                ids[i] = typeTreeId(typeTree, node.fields[i]);
+                ids[i] = typeTreeId(node.children[i]);
             }
 
-            return keccak256(abi.encodePacked(node._type, "-", ids));
+            return keccak256(abi.encodePacked(node.paramType, "-", ids));
         } else {
-            return bytes32(uint256(node._type));
+            return bytes32(uint256(node.paramType));
         }
     }
 }

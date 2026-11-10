@@ -8,41 +8,14 @@ pragma solidity >=0.8.17 <0.9.0;
  * @author Jan-Felix Schwarz  - <jan-felix.schwarz@gnosis.io>
  */
 
-/**
- * @dev Represents the key type for ABI encoding
- */
-enum AbiType {
+enum ParameterType {
     None,
     Static,
     Dynamic,
     Tuple,
     Array,
-    Calldata, // AKA AbiEncodedWithSelector,
+    Calldata,
     AbiEncoded
-}
-
-/**
- * @dev Structure representing an ABI type definition
- * @param key The type key indicating how this parameter should be encoded
- * @param fields Array of indices pointing to child types in the AbiType array
- */
-struct AbiTypeTree {
-    AbiType _type;
-    uint256[] fields;
-}
-
-/**
- * @dev Structure that maps the location and size of a parameter in calldata
- * @param index The index of the parameter in the AbiType array
- * @param location The location of the parameter in calldata
- * @param size The size of the parameter in bytes
- * @param children Array of child payloads for complex types (tuples, arrays)
- */
-struct Payload {
-    uint256 index;
-    uint256 location;
-    uint256 size;
-    Payload[] children;
 }
 
 enum Operator {
@@ -122,16 +95,21 @@ enum Clearance {
 // (ABI does not support recursive types)
 struct ConditionFlat {
     uint8 parent;
-    AbiType paramType;
+    ParameterType paramType;
     Operator operator;
     bytes compValue;
 }
 
 struct Condition {
-    AbiType paramType;
+    ParameterType paramType;
     Operator operator;
     bytes32 compValue;
     Condition[] children;
+}
+struct ParameterPayload {
+    uint256 location;
+    uint256 size;
+    ParameterPayload[] children;
 }
 
 struct TargetAddress {

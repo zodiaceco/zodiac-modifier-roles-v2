@@ -15,7 +15,7 @@ task(
     contractVersion: packageJson.version,
     contractName: "AvatarIsOwnerOfERC721",
     compilerInput: await hre.run("verify:etherscan-get-minimal-input", {
-      sourceName: "contracts/periphery/AvatarIsOwnerOfERC721.sol",
+      sourceName: "contracts/adapters/AvatarIsOwnerOfERC721.sol",
     }),
     constructorArgs: {
       types: [],
@@ -27,7 +27,7 @@ task(
     contractVersion: packageJson.version,
     contractName: "MultiSendUnwrapper",
     compilerInput: await hre.run("verify:etherscan-get-minimal-input", {
-      sourceName: "contracts/periphery/MultiSendUnwrapper.sol",
+      sourceName: "contracts/adapters/MultiSendUnwrapper.sol",
     }),
     constructorArgs: {
       types: [],
