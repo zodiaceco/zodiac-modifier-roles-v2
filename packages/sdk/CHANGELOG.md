@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.2.0](https://github.com/zodiaceco/zodiac-modifier-roles-v2/compare/zodiac-roles-sdk-v4.1.5...zodiac-roles-sdk-v4.2.0) (2026-11-25)
+
+
+### Features
+
+* **sdk:** check conditions on nested calldata before they are applied ([#13](https://github.com/zodiaceco/zodiac-modifier-roles-v2/issues/13)) ([62498cd](https://github.com/zodiaceco/zodiac-modifier-roles-v2/commit/62498cd3068fefbdc1e6ac7b7fbf3297f3758987))
+
 ## [4.1.5](https://github.com/zodiaceco/zodiac-modifier-roles-v2/compare/zodiac-roles-sdk-v4.1.4...zodiac-roles-sdk-v4.1.5) (2026-10-26)
 
 
