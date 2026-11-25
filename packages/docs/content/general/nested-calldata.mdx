@@ -1,0 +1,63 @@
+import { Callout } from "nextra/components";
+
+# Nested Calldata
+
+Some functions take a whole call as a `bytes` parameter and make that call themselves, for example `execute(address to, uint256 value, bytes data)`.
+A condition with `ParamType.Calldata` or `ParamType.AbiEncoded` on such a parameter can check the arguments of that nested call.
+This page describes an edge case of these conditions, and of `Bitmask` on `bytes` values, where a permission can be broader than expected.
+
+<Callout type="info">
+  The Roles SDK's `targetIntegrity` check and the Roles app reject the
+  conditions described here, unless you acknowledge them after checking the
+  receiving contract. This page is mainly relevant if you configure Roles with
+  your own tooling, for example by calling `scopeFunction` directly, or if you
+  applied permissions with an SDK version before this check.
+</Callout>
+
+## The edge case
+
+A `bytes` value starts with its length, followed by its content.
+When Roles v2 checks the arguments of a nested call, it does not check that they lie within that length.
+The contract receiving the nested call may therefore get fewer bytes than Roles checked.
+The same applies to a `Bitmask` on a `bytes` value that expects the last bytes it checks to be zero.
+
+Whether this matters depends on how the receiving contract handles a call that is shorter than its arguments:
+
+- **Solidity 0.5.0 and later** rejects such a call. This covers almost every contract deployed since 2019.
+- **Older Solidity versions, older Vyper versions and hand-written decoders** may accept it and read the missing bytes as zero.
+- **A call shorter than 4 bytes** has no function selector, so the receiving contract runs its fallback or `receive` function.
+
+Roles v3 checks these lengths on chain.
+
+## What to check
+
+For each permission with such a condition, check the contract that receives the nested call:
+
+1. It is compiled with Solidity 0.5.0 or later. The compiler version is shown with the verified source on the block explorer. For Vyper contracts, or anything that decodes its arguments by hand, check that cut-off arguments are rejected.
+2. Its fallback and `receive` functions do nothing unwanted when called without a selector, or the permission fixes the forwarded ether value to zero.
+
+Where the permission does not need to look into the nested call, check the `bytes` parameter as a whole with `c.eq` instead. That compares the exact bytes, including their length.
+
+## Acknowledging a checked permission
+
+The SDK's `targetIntegrity` and the Roles app report an acknowledgement for the affected function's condition.
+Once you have checked the receiving contract, pass it in `acknowledged`:
+
+```ts
+import { targetIntegrity } from "zodiac-roles-sdk";
+
+targetIntegrity(targets, {
+  acknowledged: ["0x6b8f…"], // acknowledgement from the error
+});
+```
+
+In the Roles app, add the hashes to the posted permissions:
+
+```json
+{
+  "targets": [...],
+  "acknowledged": ["0x6b8f…"]
+}
+```
+
+An acknowledgement covers exactly that condition on that function of that contract. The same condition elsewhere, or a changed condition, needs to be checked again.

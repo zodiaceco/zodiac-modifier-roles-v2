@@ -1,11 +1,12 @@
-import { createHash } from "crypto"
 import {
   BytesLike,
   concat,
   getCreate2Address,
   dataLength,
   keccak256,
+  sha256,
   toBeHex,
+  toUtf8Bytes,
 } from "ethers"
 import { Condition, Operator, ParameterType } from "../types"
 
@@ -19,9 +20,7 @@ const ZERO_SALT =
   "0x0000000000000000000000000000000000000000000000000000000000000000"
 
 export function conditionHash(condition: Condition) {
-  return (
-    "0x" + createHash("sha256").update(conditionId(condition)).digest("hex")
-  )
+  return sha256(toUtf8Bytes(conditionId(condition)))
 }
 
 /**

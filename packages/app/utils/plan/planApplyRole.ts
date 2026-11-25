@@ -1,4 +1,9 @@
-import { ChainId, Role, fetchLicense } from "zodiac-roles-sdk"
+import {
+  ChainId,
+  Role,
+  checkReadingIntegrity,
+  fetchLicense,
+} from "zodiac-roles-sdk"
 
 import { fetchRole, fetchRolesModConfig } from "@/utils/subgraph"
 
@@ -12,6 +17,8 @@ type Options = {
   chainId: ChainId
   address: `0x${string}`
   log?: boolean | ((message: string) => void)
+  /** acknowledgements of conditions checked to be safe, see checkReadingIntegrity */
+  acknowledged?: readonly string[]
 }
 
 type Result = {
@@ -34,7 +41,7 @@ type Result = {
  */
 export async function planApplyRole(
   desired: Partial<Role> & { key: `0x${string}` },
-  { chainId, address, current, log }: { current?: Role } & Options
+  { chainId, address, current, log, acknowledged }: { current?: Role } & Options
 ): Promise<Result> {
   const prev =
     current || (await fetchRole({ chainId, address, roleKey: desired.key }))
@@ -58,6 +65,17 @@ export async function planApplyRole(
   }
 
   const { minus, plus } = diffRole({ prev, next })
+
+  // Conditions being added must be read by Roles exactly as the call carries
+  // them. Conditions already on chain are left as they are.
+  for (const call of plus) {
+    if (call.call === "scopeFunction") {
+      checkReadingIntegrity(call.condition, {
+        acknowledged,
+        scope: { targetAddress: call.targetAddress, selector: call.selector },
+      })
+    }
+  }
 
   const calls = [...minus, ...plus]
   logCalls(calls, log)

@@ -48,6 +48,13 @@ export {
   type ConditionFlat,
 } from "./condition/flattenCondition"
 export { normalizeCondition } from "./condition/normalize"
+export {
+  checkReadingIntegrity,
+  ReadingIntegrityError,
+  READING_INTEGRITY_DOCS,
+  type ReadingIntegrityOptions,
+  type ReadingIntegrityScope,
+} from "./condition/readingIntegrity"
 
 /*
  *

@@ -13,6 +13,9 @@ const meta: MetaRecord = {
   annotations: {
     title: "Annotations",
   },
+  "nested-calldata": {
+    title: "Nested Calldata",
+  },
 };
 
 export default meta;

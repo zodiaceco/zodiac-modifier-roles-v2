@@ -11,10 +11,15 @@ export const POST = withErrorHandling(async (req: Request) => {
 
   if (validated.targets) {
     try {
-      targetIntegrity(validated.targets)
+      targetIntegrity(validated.targets, {
+        acknowledged: validated.acknowledged,
+      })
     } catch (e) {
       return NextResponse.json({
-        error: "Targets integrity check failed",
+        error:
+          e instanceof Error
+            ? `Targets integrity check failed: ${e.message}`
+            : "Targets integrity check failed",
       })
     }
   }

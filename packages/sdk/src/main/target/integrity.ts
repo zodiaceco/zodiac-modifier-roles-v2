@@ -1,8 +1,19 @@
 import { Clearance, Function, Target } from "../types"
 
 import { checkRootConditionIntegrity } from "../condition/conditionIntegrity"
+import { ReadingIntegrityOptions } from "../condition/readingIntegrity"
 
-export const targetIntegrity = (targets: Target[]): void => {
+/**
+ * Checks that targets are well-formed and their conditions valid.
+ *
+ * @param options.acknowledged acknowledgements of conditions checked to be
+ * safe despite a `ReadingIntegrityError` (see `checkReadingIntegrity`). Each
+ * covers one condition on one function of one target.
+ */
+export const targetIntegrity = (
+  targets: Target[],
+  options?: ReadingIntegrityOptions
+): void => {
   const uniqueAddresses = new Set(
     targets.map((target) => target.address.toLowerCase())
   )
@@ -10,10 +21,13 @@ export const targetIntegrity = (targets: Target[]): void => {
     throw new Error("Duplicate target addresses")
   }
 
-  targets.forEach(targetEntry)
+  targets.forEach((target) => targetEntry(target, options))
 }
 
-const targetEntry = (target: Target): void => {
+const targetEntry = (
+  target: Target,
+  options?: ReadingIntegrityOptions
+): void => {
   if (
     target.clearance === Clearance.Function &&
     target.functions.length === 0
@@ -36,10 +50,14 @@ const targetEntry = (target: Target): void => {
     throw new Error(`Duplicate functions in target ${target.address}`)
   }
 
-  target.functions.forEach(functionEntry)
+  target.functions.forEach((func) => functionEntry(target, func, options))
 }
 
-const functionEntry = (func: Function): void => {
+const functionEntry = (
+  target: Target,
+  func: Function,
+  options?: ReadingIntegrityOptions
+): void => {
   if (func.wildcarded && func.condition) {
     throw new Error(
       `Wildcarded functions cannot have conditions (function in violation: ${func.selector})`
@@ -53,6 +71,9 @@ const functionEntry = (func: Function): void => {
   }
 
   if (func.condition) {
-    checkRootConditionIntegrity(func.condition)
+    checkRootConditionIntegrity(func.condition, {
+      ...options,
+      scope: { targetAddress: target.address, selector: func.selector },
+    })
   }
 }
