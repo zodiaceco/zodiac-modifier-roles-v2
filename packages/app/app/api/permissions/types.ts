@@ -6,6 +6,8 @@ export const zPermissionsPost = z.object({
   targets: z.array(zTarget).optional(),
   annotations: z.array(zAnnotation).optional(),
   members: z.array(zAddress).optional(),
+  /** acknowledgements of conditions checked to be safe, see checkReadingIntegrity */
+  acknowledged: z.array(z.string()).optional(),
 })
 
 /**
@@ -21,4 +23,5 @@ export interface PermissionsPost {
   targets?: Target[]
   annotations?: Annotation[]
   members?: `0x${string}`[]
+  acknowledged?: string[]
 }

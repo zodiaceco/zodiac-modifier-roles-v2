@@ -1,4 +1,4 @@
-import { LicenseError } from "zodiac-roles-sdk"
+import { LicenseError, ReadingIntegrityError } from "zodiac-roles-sdk"
 import { notFound } from "next/navigation"
 import { kv } from "@vercel/kv"
 
@@ -118,7 +118,12 @@ export default async function DiffPage(props: {
         targets: post.targets,
         annotations: post.annotations,
       },
-      { chainId: mod.chainId, address: mod.address, log: logCall }
+      {
+        chainId: mod.chainId,
+        address: mod.address,
+        log: logCall,
+        acknowledged: post.acknowledged,
+      }
     )
   } catch (error) {
     if (error instanceof LicenseError) {
@@ -151,6 +156,17 @@ export default async function DiffPage(props: {
                 </>
               )}
               {unwrapperWarning}
+            </Flex>
+          </main>
+        </Layout>
+      )
+    }
+    if (error instanceof ReadingIntegrityError) {
+      return (
+        <Layout head={<PageBreadcrumbs {...params} mod={mod} />}>
+          <main>
+            <Flex direction="column" gap={3}>
+              <Alert title="Condition needs a check">{error.message}</Alert>
             </Flex>
           </main>
         </Layout>

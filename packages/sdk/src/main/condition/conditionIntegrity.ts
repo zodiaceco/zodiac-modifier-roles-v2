@@ -1,6 +1,15 @@
 import { Condition, Operator, ParameterType } from "../types"
 
-export const checkRootConditionIntegrity = (condition: Condition): void => {
+import {
+  ReadingIntegrityOptions,
+  ReadingIntegrityScope,
+  checkReadingIntegrity,
+} from "./readingIntegrity"
+
+export const checkRootConditionIntegrity = (
+  condition: Condition,
+  options?: ReadingIntegrityOptions & { scope?: ReadingIntegrityScope }
+): void => {
   const rootType = checkConsistentChildrenTypes(condition)
   if (rootType !== ParameterType.Calldata) {
     throw new Error(
@@ -8,6 +17,7 @@ export const checkRootConditionIntegrity = (condition: Condition): void => {
     )
   }
   checkConditionIntegrityRecursive(condition)
+  checkReadingIntegrity(condition, options)
 }
 
 export const checkConditionIntegrity = (condition: Condition): void => {

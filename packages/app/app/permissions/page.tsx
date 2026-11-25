@@ -42,14 +42,16 @@ export default function PermissionsPage() {
   let targets: Target[] | undefined = undefined
   let annotations: Annotation[] | undefined = undefined
   let members: `0x${string}`[] | undefined = undefined
+  let acknowledged: string[] | undefined = undefined
   if (json) {
     try {
-      // {targets: [...], annotations: [...], members: [...] }
-      ;({ targets, annotations, members } = z
+      // {targets: [...], annotations: [...], members: [...], acknowledged: [...] }
+      ;({ targets, annotations, members, acknowledged } = z
         .object({
           targets: z.array(zTarget).optional(),
           annotations: z.array(zAnnotation).optional(),
           members: z.array(zAddress).optional(),
+          acknowledged: z.array(z.string()).optional(),
         })
         .parse(json))
       if (!targets && !annotations && !members) {
@@ -82,7 +84,7 @@ export default function PermissionsPage() {
 
   if (targets) {
     try {
-      targetIntegrity(targets)
+      targetIntegrity(targets, { acknowledged })
     } catch (e) {
       errorMessage =
         e instanceof Error
@@ -95,7 +97,7 @@ export default function PermissionsPage() {
     setSubmitPending(true)
     const res = await fetch("/api/permissions", {
       method: "POST",
-      body: JSON.stringify({ targets, annotations, members }),
+      body: JSON.stringify({ targets, annotations, members, acknowledged }),
     })
     const { hash } = await res.json()
     if (hash) {
